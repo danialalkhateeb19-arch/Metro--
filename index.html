@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>اشتراك المترو</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#a97a2f">
+<link rel="icon" href="icon192.png">
+<link rel="apple-touch-icon" href="icon192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg: #f7f7f5;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f1f1ef;
+  --border: #dcdcd6;
+  --text: #1c1c1a;
+  --text-dim: #6b6b64;
+  --accent: #a97a2f;
+  --accent-bg: #fbeed9;
+  --good: #1f8a56;
+  --bad: #c0392b;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20,20,15,.06);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Cairo', sans-serif;
+  min-height:100vh;
+  line-height:1.6;
+}
+.mono{ font-family:'JetBrains Mono', monospace; }
+
+/* ===== Header ===== */
+header{
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border);
+  display:flex; align-items:flex-start; justify-content:space-between;
+  flex-wrap:wrap; gap:14px;
+  background: var(--bg-panel);
+}
+.header-right{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.header-left{ display:flex; align-items:center; gap:10px; }
+.brand{ display:flex; align-items:center; gap:12px; }
+.brand .dot{
+  width:10px; height:10px; border-radius:50%;
+  background: var(--accent);
+}
+.brand h1{ font-size:1.15rem; font-weight:900; letter-spacing:.3px; color: var(--text); margin-top:0; }
+.brand span{ color: var(--text-dim); font-size:.8rem; display:block; margin-top:2px;}
+
+.toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.btn{
+  background: var(--bg-panel-2);
+  border:1px solid var(--border);
+  color: var(--text);
+  height:36px; padding:0 16px; box-sizing:border-box;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  border-radius:8px;
+  font-family:'Cairo',sans-serif;
+  font-size:.85rem;
+  font-weight:600;
+  cursor:pointer;
+  transition: all .15s ease;
+  white-space:nowrap;
+}
+.btn:hover{ border-color: var(--accent); color: var(--accent); background:#fff; }
+.btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.btn:active{ transform:scale(.96); }
+.btn:disabled{ opacity:0.4; cursor:not-allowed; }
+.btn:disabled:hover{ border-color: var(--border); color: var(--text); background: var(--bg-panel-2); }
+.btn.primary{
+  background: var(--accent);
+  color:#fff;
+  border-color: var(--accent);
+}
+.btn.primary:hover{ background:#8f6423; color:#fff; }
+.btn.ghost{ background:transparent; }
+
+main{ max-width: 1180px; margin:0 auto; padding: 28px; }
+.view{ display:none; }
+.view.active{ display:flex; flex-direction:column; gap:16px; }
+.view.active.enter-forward{ animation: slideInForward .32s var(--ease,ease); }
+.view.active.enter-backward{ animation: slideInBackward .32s var(--ease,ease); }
+@keyframes slideInForward{ from{opacity:0; transform:translateX(28px);} to{opacity:1; transform:translateX(0);} }
+@keyframes slideInBackward{ from{opacity:0; transform:translateX(-28px);} to{opacity:1; transform:translateX(0);} }
+
+/* ===== Cards / Panels ===== */
+.grid{ display:grid; gap:16px; }
+.grid.cols-4{ grid-template-columns: repeat(4, 1fr); }
+.grid.cols-2{ grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 900px){
+  .grid.cols-4{ grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-2{ grid-template-columns: 1fr; }
+}
+@media (max-width: 560px){
+  .grid.cols-4{ grid-template-columns: 1fr; }
+}
+
+/* ===== Luxury Subscription Card ===== */
+.lux-card{
+  background:#FAF7F1;
+  border:1px solid #C9A94D;
+  border-radius:30px;
+  box-shadow:0 12px 40px rgba(184,145,47,0.14), 0 2px 8px rgba(0,0,0,0.04);
+  padding:40px 32px;
+  text-align:center;
+  margin-bottom:16px;
+}
+.lux-date{
+  font-family:'Times New Roman', Times, serif;
+  font-size:1.05rem;
+  color:#B8912F;
+  letter-spacing:1px;
+  direction:ltr;
+}
+.lux-divider{
+  width:70px; height:1px; background:#C9A94D;
+  margin:22px auto; opacity:.8;
+}
+.lux-remaining{
+  font-family:'Cairo', sans-serif;
+  font-weight:600;
+  font-size:1.4rem;
+  color:#8A6A32;
+  letter-spacing:.3px;
+  white-space:nowrap;
+}
+
+.fab-add-sub{
+  position:fixed; left:20px; bottom:84px; z-index:50;
+  width:58px; height:58px; border-radius:50%;
+  background: var(--accent); color:#fff; border:none;
+  display:flex; align-items:center; justify-content:center;
+  font-size:2rem; font-weight:700; line-height:1; cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
+}
+.fab-add-sub:active{ transform:scale(.92); }
+
+.lux-date-input{
+  width:100%; box-sizing:border-box;
+  background: var(--bg-panel-2); border:1px solid var(--border); color:var(--text);
+  padding:11px 14px; border-radius:8px; font-family:'Cairo',sans-serif; font-size:.95rem;
+  cursor:pointer;
+}
+.lux-date-input::-webkit-calendar-picker-indicator{
+  filter: invert(58%) sepia(45%) saturate(500%) hue-rotate(1deg);
+  cursor:pointer;
+}
+
+.accordion-summary{
+  padding:11px 14px; background: var(--bg-panel-2); border:1px solid var(--border);
+  border-radius:8px; cursor:pointer; font-size:.9rem;
+}
+
+.panel{
+  background: var(--bg-panel);
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.panel h2{ font-size:1rem; font-weight:800; margin-bottom:16px; display:flex; align-items:center; gap:8px; color: var(--text);}
+.panel h2 .tag{ font-size:.7rem; color:var(--text-dim); font-weight:600; background:var(--bg-panel-2); padding:2px 8px; border-radius:20px; border:1px solid var(--border);}
+
+.stat{
+  background: var(--bg-panel);
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.stat .label{ font-size:.75rem; color:var(--text-dim); font-weight:600; margin-bottom:8px;}
+.stat .value{ font-size:1.5rem; font-weight:700; font-family:'JetBrains Mono',monospace; color: var(--text);}
+.stat .value.good{ color: var(--good); }
+.stat .value.bad{ color: var(--bad); }
+
+/* ===== Monthly inputs table ===== */
+.months-table{ width:100%; border-collapse: collapse; margin-top:10px; table-layout:fixed; }
+.months-table th{
+  text-align:right; font-size:.75rem; color:var(--text-dim);
+  padding:8px 6px; border-bottom:1px solid var(--border); font-weight:700;
+  white-space:nowrap;
+}
+.months-table th:nth-child(1){ width:22%; }
+.months-table th:nth-child(2){ width:40%; }
+.months-table th:nth-child(3){ width:38%; }
+.months-table td{ padding:6px; border-bottom:1px solid var(--border); }
+.months-table input{
+  width:100%; background: var(--bg-panel-2); border:1px solid var(--border);
+  color: var(--text); padding:7px 8px; border-radius:6px;
+  font-family:'JetBrains Mono',monospace; font-size:.85rem;
+}
+.months-table th:nth-child(2), .months-table td:nth-child(2),
+.months-table th:nth-child(3), .months-table td:nth-child(3){ text-align:center; }
+
+/* ============================================================
+ * Trip Swipe/Drag Control — يحل محل حقل "عدد الرحلات" الرقمي
+ * نفس المظهر البصري تمامًا للحقل القديم (لا تغيير بالتصميم)،
+ * فقط تفاعل سحب بدل الكتابة المباشرة.
+ * ============================================================ */
+.trip-swipe{
+  width:55%; margin:0 auto;
+  background: var(--bg-panel-2); border:1px solid var(--border);
+  color: var(--text); padding:7px 8px; border-radius:6px;
+  font-family:'JetBrains Mono', monospace; font-size:.85rem;
+  text-align:center; cursor:ew-resize; outline:none;
+  -webkit-user-select:none; user-select:none;
+  touch-action: pan-y; /* يسمح بالتمرير العمودي للصفحة، ويمنع تعارضه مع السحب الأفقي */
+}
+.trip-swipe.is-active{ border-color: var(--accent); background:#fff; }
+.trip-swipe.dragging{ background: var(--accent-bg); }
+.trip-swipe:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.trip-swipe-value{ pointer-events:none; }
+.months-table .trip-swipe{ cursor:pointer; touch-action:auto; }
+.months-table input:focus{ outline:none; border-color: var(--accent); background:#fff;}
+.months-table td.month-name{ font-weight:700; font-size:.85rem; color:var(--text); white-space:nowrap; }
+
+.field-row{ display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+.field-row label{ font-size:.85rem; font-weight:700; color: var(--text-dim); min-width:150px;}
+.field-row input, .field-row select{
+  background: var(--bg-panel-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 12px; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:.9rem;
+  flex:1; min-width:120px;
+}
+.field-row input:focus, .field-row select:focus{ outline:none; border-color:var(--accent); background:#fff;}
+
+.status-bar{
+  position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+  background: #fff; border:1px solid var(--accent); color: var(--accent);
+  padding:10px 20px; border-radius:20px; font-size:.85rem; font-weight:700;
+  opacity:0; pointer-events:none; transition: opacity .25s ease;
+  z-index:100; box-shadow: var(--shadow);
+}
+.status-bar.show{ opacity:1; }
+
+/* ===== Auto-save Toast (small, non-blocking recalculation notice) ===== */
+.autosave-toast{
+  position:fixed; top:16px; left:50%;
+  transform:translateX(-50%) translateY(-6px);
+  background: #fff; border:1px solid var(--good); color: var(--good);
+  padding:8px 18px; border-radius:20px; font-size:.78rem; font-weight:700;
+  box-shadow: var(--shadow); z-index:200;
+  opacity:0; pointer-events:none;
+  display:flex; align-items:center; gap:8px;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.autosave-toast::before{
+  content:""; width:6px; height:6px; border-radius:50%; background: var(--good); flex:none;
+}
+.autosave-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75rem; padding-bottom: 80px; }
+
+/* ===== Bottom Navigation ===== */
+.bottom-nav{
+  position:fixed; bottom:0; left:0; right:0;
+  background: var(--bg-panel); border-top:1px solid var(--border);
+  display:flex; justify-content:center; gap:0; z-index:90;
+  box-shadow: 0 -2px 8px rgba(20,20,15,.06);
+}
+.bottom-nav button{
+  flex:1; max-width:160px; background:none; border:none;
+  color: var(--text-dim); font-family:'Cairo',sans-serif;
+  font-size:.75rem; font-weight:700; padding:10px 8px 14px;
+  cursor:pointer; transition: all .15s ease; display:flex;
+  flex-direction:column; align-items:center; gap:4px;
+}
+.bottom-nav button .icon{ font-size:1.3rem; line-height:1; }
+.bottom-nav button:hover{ color: var(--text); }
+.bottom-nav button:active{ transform:scale(.92); }
+.bottom-nav button.active{ color: var(--accent); }
+.bottom-nav button.active .icon{ filter: drop-shadow(0 0 0 var(--accent)); }
+/* ===== Year Display & Selector ===== */
+.year-display{
+  display:flex; align-items:center; gap:8px;
+  height:36px; padding:0 12px; box-sizing:border-box;
+  background: var(--accent-bg); border:1px solid var(--accent);
+  color: var(--accent); border-radius:20px;
+  font-family:'JetBrains Mono',monospace; font-weight:700; font-size:.85rem;
+  cursor:pointer; transition: background .15s ease, transform .1s ease;
+}
+.year-display:hover{ background: #f4dfb8; }
+.year-display:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.year-display:active{ transform:scale(.96); }
+.btn[disabled]{ opacity:.4; cursor:not-allowed; }
+
+/* ===== Year Picker / Add Year Modals ===== */
+.modal-overlay{
+  position:fixed; inset:0; z-index:200;
+  background: rgba(24,20,12,.4);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+  animation: overlayFadeIn .18s ease;
+  transition: top .22s ease, height .22s ease; /* انتقال سلس عند ظهور/اختفاء الكيبورد */
+}
+.modal-overlay.hidden{ display:none; }
+@keyframes overlayFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+.modal-box{
+  background: var(--bg-panel); border:1px solid var(--border);
+  border-radius: var(--radius); padding:22px; max-width:360px; width:100%;
+  max-height:100%; overflow-y:auto;
+  box-shadow: var(--shadow);
+  animation: modalScaleIn .2s cubic-bezier(.22,1,.36,1);
+}
+@keyframes modalScaleIn{
+  from{ opacity:0; transform:scale(.94) translateY(8px); }
+  to{ opacity:1; transform:scale(1) translateY(0); }
+}
+.modal-box h2{ font-size:1.05rem; font-weight:800; margin-bottom:14px; color:var(--text); }
+
+.year-chip-list{
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;
+  max-height:240px; overflow-y:auto;
+}
+.year-chip{
+  background: var(--bg-panel-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 16px; border-radius:20px; font-family:'JetBrains Mono',monospace;
+  font-weight:700; font-size:.9rem; cursor:pointer; transition: all .15s ease;
+}
+.year-chip:hover{ border-color:var(--accent); color:var(--accent); }
+.year-chip:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.year-chip:active{ transform:scale(.94); }
+.year-chip.current{ background: var(--accent); color:#fff; border-color:var(--accent); }
+
+.modal-full{ width:100%; }
+.modal-actions{ display:flex; gap:8px; margin-top:6px; }
+.modal-actions .btn{ flex:1; }
+
+/* حقل + زر إجراء بجانب بعض — يتحول لعمودي فقط على شاشات ضيقة جدًا */
+.modal-input-label{ display:block; font-size:.8rem; font-weight:700; color:var(--text-dim); margin-bottom:8px; }
+.inline-field-action{ display:flex; gap:8px; margin-bottom:12px; }
+.inline-field-action input{
+  flex:1; min-width:0;
+  background: var(--bg-panel-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 12px; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:.95rem;
+}
+.inline-field-action input:focus{ outline:none; border-color:var(--accent); background:#fff; }
+.inline-field-action .btn{ flex-shrink:0; }
+@media (max-width:340px){
+  .inline-field-action{ flex-wrap:wrap; }
+  .inline-field-action .btn{ width:100%; }
+}
+
+/* حقل السعر للعرض فقط — يفتح المودال عند الضغط */
+#subAnnualPrice[readonly]{ cursor:pointer; background: var(--bg-panel-2); }
+
+/* نسخة مكبّرة من عنصر السحب داخل مودال الرحلات الشهرية */
+.trip-swipe-modal-wrap{ margin:20px 0; }
+.trip-swipe.trip-swipe-lg{
+  width:100%; padding:22px 12px; font-size:1.6rem; border-radius:14px;
+}
+.btn.icon-only{
+  width:26px; height:26px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.75rem; line-height:1;
+}
+
+/* ===== Action Toolbar — يجمع أزرار التحديث/التراجع/الإعادة/التصدير
+   بحاوية واحدة مستديرة مضغوطة، بفواصل خفيفة بين كل زر ===== */
+.action-toolbar{
+  display:flex; align-items:stretch;
+  background: var(--bg-panel-2);
+  border:1px solid var(--border);
+  border-radius:20px;
+  overflow:hidden; /* يقصّ زوايا الأزرار الطرفية لتطابق استدارة الحاوية */
+}
+.action-toolbar .btn.icon-only{
+  background:transparent; border:none; border-radius:0;
+}
+.action-toolbar .btn.icon-only:not(:last-child){
+  border-inline-end:1px solid var(--border); /* فاصل خفيف بين الأزرار */
+}
+.action-toolbar .btn.icon-only:hover{ background: var(--bg-panel); }
+.action-toolbar .btn.icon-only:active{ transform:none; background: var(--accent-bg); }
+.action-toolbar .btn.icon-only:focus-visible{ outline-offset:-2px; }
+
+.chart-wrap{ position:relative; height:260px; margin-top:10px; }
+@media (max-width:560px){
+  .chart-wrap{ height:220px; }
+  header{ padding:16px; }
+  main{ padding:16px 12px 12px; }
+  .modal-box{ padding:18px; }
+  .months-table th:nth-child(1){ width:26%; }
+  .months-table th:nth-child(2){ width:38%; }
+  .months-table th:nth-child(3){ width:36%; }
+  .months-table td.month-name{ font-size:.78rem; }
+}
+.chart-card-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.chart-card-header h2{ margin:0; }
+</style>
+</head>
+<body>
+
+<header role="banner">
+  <div class="header-right">
+    <div class="brand">
+      <div>
+        <h1>اشتراك المترو</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-left">
+    <button class="btn" id="btnOpenArchive" title="أرشيف الاشتراكات">الأرشيف</button>
+    <button class="btn primary" id="btnInstall" title="تثبيت التطبيق">تثبيت التطبيق</button>
+  </div>
+</header>
+
+<!-- ============ Year Picker Modal ============ -->
+<div class="modal-overlay hidden" id="yearPickerModal">
+  <div class="modal-box">
+    <h2>اختر السنة</h2>
+    <div class="year-chip-list" id="yearChipList"></div>
+    <button class="btn primary modal-full" id="btnOpenAddYear">+ إضافة سنة</button>
+  </div>
+</div>
+
+<!-- ============ Statistics Filter Modal ============ -->
+<div class="modal-overlay hidden" id="statsFilterModal">
+  <div class="modal-box">
+    <h2>عرض بيانات الإحصائيات</h2>
+    <p style="font-size:.8rem; color:var(--text-dim); margin:-8px 0 14px;">اختر "كل السنوات"، سنة واحدة، أو عدة سنوات</p>
+    <div class="year-chip-list" id="statsFilterChipList"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelStatsFilter">إلغاء</button>
+      <button class="btn primary" id="btnApplyStatsFilter">تطبيق</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Annual Price Modal ============ -->
+<div class="modal-overlay hidden" id="annualPriceModal">
+  <div class="modal-box">
+    <h2>سعر الاشتراك السنوي</h2>
+    <label for="annualPriceModalInput" class="modal-input-label">السعر (₽)</label>
+    <div class="inline-field-action">
+      <input type="number" id="annualPriceModalInput" inputmode="numeric" maxlength="6" max="999999" min="0">
+      <button class="btn primary" id="btnSaveAnnualPrice">حفظ</button>
+    </div>
+    <button class="btn modal-full" id="btnCancelAnnualPrice">إلغاء</button>
+  </div>
+</div>
+
+<!-- ============ Monthly Trips Modal ============ -->
+<div class="modal-overlay hidden" id="tripModal">
+  <div class="modal-box">
+    <h2 id="tripModalTitle">الرحلات الشهرية</h2>
+    <div class="trip-swipe-modal-wrap" id="tripModalSwipeWrap">
+      <div class="trip-swipe trip-swipe-lg" id="tripModalSwipe" data-month="" data-field="trips" data-value="0" data-min="0" data-max="300" data-defer-commit="true"
+           tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0">
+        <span class="trip-swipe-value">—</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" id="btnDoneTripModal">تم</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Troika Price Modal ============ -->
+<div class="modal-overlay hidden" id="priceModal">
+  <div class="modal-box">
+    <h2 id="priceModalTitle">سعر الرحلة بالترويكا</h2>
+    <div class="trip-swipe-modal-wrap" id="priceModalSwipeWrap">
+      <div class="trip-swipe trip-swipe-lg" id="priceModalSwipe" data-month="" data-field="price" data-value="0" data-min="0" data-max="500" data-defer-commit="true"
+           tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="500" aria-valuenow="0">
+        <span class="trip-swipe-value">—</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" id="btnDonePriceModal">تم</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Add Year Modal ============ -->
+<div class="modal-overlay hidden" id="addYearModal">
+  <div class="modal-box">
+    <h2>إضافة سنة جديدة</h2>
+    <label for="newYearInput" class="modal-input-label">السنة (ماضية أو مستقبلية)</label>
+    <div class="inline-field-action">
+      <input type="number" id="newYearInput" placeholder="مثال: 2023 أو 2027" inputmode="numeric">
+      <button class="btn primary" id="btnConfirmAddYear">إضافة</button>
+    </div>
+    <button class="btn modal-full" id="btnCancelAddYear">إلغاء</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="addSubscriptionModal">
+  <div class="modal-box">
+    <h2>إضافة اشتراك</h2>
+    <label for="subStartDateInput" class="modal-input-label">تاريخ شراء الاشتراك</label>
+    <input type="date" id="subStartDateInput" class="lux-date-input" style="margin-bottom:14px;">
+    <button class="btn primary modal-full" id="btnConfirmAddSubscription" style="margin-top:14px; margin-bottom:10px;">إضافة</button>
+    <button class="btn modal-full" id="btnCancelAddSubscription">إلغاء</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="extendSubModal">
+  <div class="modal-box">
+    <h2>تمديد الاشتراك</h2>
+    <button class="btn primary modal-full" id="btnConfirmExtendSub" style="margin-bottom:10px;">إضافة 14 يوم</button>
+    <button class="btn modal-full" id="btnCancelUndoExtendSub" style="margin-bottom:10px; display:none;">إلغاء التمديد</button>
+    <button class="btn modal-full" id="btnCancelExtendSub">إغلاق</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="archiveModal">
+  <div class="modal-box">
+    <h2>أرشيف الاشتراكات</h2>
+    <div class="year-chip-list" id="archiveList"></div>
+    <button class="btn modal-full" id="btnCloseArchive">إغلاق</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="archiveDetailModal">
+  <div class="modal-box">
+    <h2>تفاصيل الاشتراك</h2>
+    <div id="archiveDetailContent" style="margin-bottom:14px; line-height:2;"></div>
+    <button class="btn primary modal-full" id="btnEditArchiveSub" style="margin-bottom:10px;">تعديل</button>
+    <button class="btn modal-full" id="btnDeleteArchiveSub" style="margin-bottom:10px; color:#c0392b; border-color:#c0392b;">حذف الاشتراك</button>
+    <button class="btn modal-full" id="btnCloseArchiveDetail">إغلاق</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="confirmDeleteSubModal">
+  <div class="modal-box">
+    <h2>تأكيد الحذف</h2>
+    <p style="font-size:.9rem; color:var(--text-dim); margin-bottom:16px;">هل أنت متأكد أنك تريد حذف هذا الاشتراك؟</p>
+    <button class="btn primary modal-full" id="btnConfirmDeleteSub" style="margin-bottom:10px; background:#c0392b; border-color:#c0392b;">نعم، احذف</button>
+    <button class="btn modal-full" id="btnCancelDeleteSub">تراجع</button>
+  </div>
+</div>
+
+<main>
+
+  <section class="view active" id="view-subscription">
+    <div class="lux-card" id="luxCard">
+      <div class="lux-remaining" id="luxRemainingDays">—</div>
+      <div class="lux-divider"></div>
+      <div class="lux-date" id="luxEndDate">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>إعدادات الاشتراك</h2>
+      <div class="accordion-summary" id="subAnnualPriceSummary">سعر الاشتراك السنوي: — ₽</div>
+      <input type="number" id="subAnnualPrice" value="25000" style="display:none;">
+    </div>
+
+    <div class="panel">
+      <h2>البيانات الشهرية</h2>
+      <div class="accordion-summary" id="monthsSummaryToggle">عدد الرحلات : <span id="monthsSummaryCount">0</span></div>
+      <table class="months-table" id="monthsTable" style="display:none;">
+        <thead>
+          <tr>
+            <th scope="col">الشهر</th>
+            <th scope="col">عدد الرحلات</th>
+            <th scope="col">سعر الرحلة بالترويكا (₽)</th>
+          </tr>
+        </thead>
+        <tbody id="monthsTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>التفاصيل الإضافية</h2>
+      <div class="accordion-summary" id="detailsSummaryToggle">عرض كل التفاصيل</div>
+      <div class="grid cols-4" id="resultsGrid" style="display:none;">
+        <div class="stat"><div class="label">تكلفة جميع الرحلات بالترويكا</div><div class="value mono" id="rTroikaCost">—</div></div>
+        <div class="stat"><div class="label">تكلفة الرحلة الواحدة بالاشتراك السنوي</div><div class="value mono" id="rCostPerTrip">—</div></div>
+        <div class="stat"><div class="label">متوسط عدد الرحلات بالشهر</div><div class="value mono" id="rAvgTripsPerMonth">—</div></div>
+        <div class="stat"><div class="label">الربح والخسارة</div><div class="value mono" id="rSavings">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-statistics">
+    <div class="panel">
+      <h2>الإحصائيات</h2>
+      <div class="field-row">
+        <label>عرض البيانات لـ</label>
+        <button type="button" class="btn" id="statsFilterBtn">جميع الاشتراكات</button>
+      </div>
+    </div>
+
+    <div class="grid cols-4" id="statsCardsGrid">
+      <div class="stat"><div class="label">إجمالي الرحلات</div><div class="value mono" id="statsTotalTrips">—</div></div>
+      <div class="stat"><div class="label">إجمالي تكلفة الاشتراك</div><div class="value mono" id="statsTotalSubCost">—</div></div>
+      <div class="stat"><div class="label">إجمالي تكلفة الترويكا</div><div class="value mono" id="statsTotalTroikaCost">—</div></div>
+      <div class="stat"><div class="label">إجمالي التوفير</div><div class="value mono" id="statsTotalSavings">—</div></div>
+      <div class="stat"><div class="label">متوسط التكلفة لكل رحلة</div><div class="value mono" id="statsAvgCostPerTrip">—</div></div>
+      <div class="stat"><div class="label">متوسط عدد الرحلات في الشهر</div><div class="value mono" id="statsAvgTripsPerMonth">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="chart-card-header">
+        <h2>تكلفة الاشتراك مقابل الترويكا</h2>
+        <button type="button" class="btn icon-only" id="btnToggleCompareChartType" title="تبديل نوع الرسم البياني" aria-label="تبديل نوع الرسم البياني">📈</button>
+      </div>
+      <div class="chart-wrap"><canvas id="statsChartCompare"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>عدد الرحلات لكل سنة</h2>
+      <div class="chart-wrap"><canvas id="statsChartTrips"></canvas></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="status-bar" id="statusBar" role="status" aria-live="polite"></div>
+<div class="autosave-toast" id="autosaveToast" role="status" aria-live="polite"></div>
+<footer>يعمل بالكامل محليًا في متصفحك — لا يتم إرسال أي بيانات لأي خادم</footer>
+
+<nav class="bottom-nav" aria-label="التنقل الرئيسي">
+  <button data-view="subscription" class="active" aria-current="page"><span class="icon" aria-hidden="true">🚇</span>الرحلات</button>
+  <button data-view="statistics"><span class="icon" aria-hidden="true">📊</span>الإحصائيات</button>
+</nav>
+
+<button class="fab-add-sub" id="btnAddSubscription" title="إضافة اشتراك" aria-label="إضافة اشتراك">+</button>
+
+<script>
+/* ============================================================
+ * 1. DATA MODEL — الحالة الافتراضية (per year)
+ * ============================================================ */
+const MONTH_NAMES = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const MONTH_KEYS = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+
+/* المفتاح الجذري الوحيد في localStorage — كل السنوات تعيش تحته */
+const ROOT_STORAGE_KEY = "metroAppData";
+const LAST_VIEW_KEY = "metroAppLastView";
+
+function defaultState(year){
+  const months = {};
+  const monthlyPrices = {};
+
+  MONTH_KEYS.forEach((k) => {
+    months[k] = { trips: 0, note: "" };
+    monthlyPrices[k] = 0;
+  });
+
+  return {
+    usage: { year: Number(year), months, dailyTripCounts: {} },
+    subscription: {
+      annualPrice: 0,
+      ticketPrice: { mode: "monthly", fixedValue: 0, monthly: monthlyPrices },
+      startDate: `${year}-01-01`,
+      extensionDays: 0,
+      extended: false
+    },
+    meta: { version: "1.0", createdAt: new Date().toISOString(), lastUpdated: null, schemaVersion: 1 }
+  };
+}
+
+let AppState = null;      // بيانات السنة الحالية المفتوحة
+let currentYear = null;
+
+/* ============================================================
+ * History — Undo / Redo
+ * ============================================================ */
+const MAX_HISTORY = 50;
+let historyStack = [];
+let historyIndex = -1;
+let isRestoringHistory = false; // prevents pushing history while undoing/redoing
+
+function cloneState(state){
+  return JSON.parse(JSON.stringify(state));
+}
+
+function statesEqual(a, b){
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function pushHistory(){
+  if(isRestoringHistory || !AppState) return;
+  const snapshot = cloneState(AppState);
+  // Prevent duplicate consecutive entries
+  if(historyIndex >= 0 && statesEqual(historyStack[historyIndex], snapshot)) return;
+  // Clear redo history when new change occurs
+  if(historyIndex < historyStack.length - 1){
+    historyStack = historyStack.slice(0, historyIndex + 1);
+  }
+  historyStack.push(snapshot);
+  if(historyStack.length > MAX_HISTORY) historyStack.shift();
+  else historyIndex++;
+  updateHistoryButtons();
+}
+
+function canUndo(){ return historyIndex > 0; }
+function canRedo(){ return historyIndex < historyStack.length - 1; }
+
+function updateHistoryButtons(){
+  const undoBtn = document.getElementById("btnUndo");
+  const redoBtn = document.getElementById("btnRedo");
+  if(undoBtn) undoBtn.disabled = !canUndo();
+  if(redoBtn) redoBtn.disabled = !canRedo();
+}
+
+function undo(){
+  if(!canUndo()) return;
+  historyIndex--;
+  isRestoringHistory = true;
+  AppState = cloneState(historyStack[historyIndex]);
+  saveCurrentYearData();
+  pushHistory();
+  refreshAllViews();
+  isRestoringHistory = false;
+  updateHistoryButtons();
+}
+
+function redo(){
+  if(!canRedo()) return;
+  historyIndex++;
+  isRestoringHistory = true;
+  AppState = cloneState(historyStack[historyIndex]);
+  saveCurrentYearData();
+  pushHistory();
+  refreshAllViews();
+  isRestoringHistory = false;
+  updateHistoryButtons();
+}
+
+/* ============================================================
+ * 2. ENGINE — Subscription
+ * ============================================================ */
+function calculateSubscriptionValue(usage, subscription){
+  const totalTrips = getTotalTrips(usage);
+  const costWithoutSub = getCostWithoutSubscription(usage, subscription);
+  const costWithSub = subscription.annualPrice;
+  const savings = costWithoutSub - costWithSub;
+  const savingsPercent = costWithoutSub > 0 ? Number(((savings/costWithoutSub)*100).toFixed(1)) : 0;
+  const costPerTrip = totalTrips > 0 ? Number((costWithSub/totalTrips).toFixed(2)) : 0;
+  const avgTicket = getAverageTicketPrice(subscription);
+  const breakEvenTrips = avgTicket > 0 ? Math.ceil(costWithSub/avgTicket) : 0;
+
+  return { totalTrips, costWithoutSub, costWithSub, savings, savingsPercent, costPerTrip, breakEvenTrips,
+    verdict: savings >= 0 ? "الاشتراك يستحق ✓" : "الاشتراك غير مجدٍ ✗" };
+}
+function getTotalTrips(usage){ return Object.values(usage.months).reduce((s,m)=>s+Number(m.trips||0),0); }
+function getCostWithoutSubscription(usage, subscription){
+  let total = 0;
+  for(const k in usage.months){
+    total += Number(usage.months[k].trips||0) * getTicketPriceForMonth(subscription,k);
+  }
+  return total;
+}
+
+/** تاريخ انتهاء الاشتراك = تاريخ البدء + 365 يوم + أيام التمديد (حتى 14 يوم) */
+function getSubscriptionEndDate(subscription){
+  const start = new Date(subscription.startDate + "T00:00:00");
+  const extension = Number(subscription.extensionDays || 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 364 + extension);
+  return end;
+}
+
+/** عدد الأيام المتبقية حتى تاريخ الانتهاء (لا تقل عن صفر) */
+function getRemainingDays(subscription){
+  const end = getSubscriptionEndDate(subscription);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+  const diffDays = Math.round((end - today) / 86400000);
+  return Math.max(0, diffDays);
+}
+function getTicketPriceForMonth(subscription, monthKey){
+  const tp = subscription.ticketPrice;
+  return Number(tp.monthly[monthKey] ?? tp.fixedValue ?? 0);
+}
+function getAverageTicketPrice(subscription){
+  const vals = Object.values(subscription.ticketPrice.monthly).map(Number);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+}
+
+/* ============================================================
+ * 4. YEARLY STORAGE SYSTEM
+ * ============================================================ */
+function loadAllYearsData(){
+  const raw = localStorage.getItem(ROOT_STORAGE_KEY);
+  if(!raw) return {};
+  try{ return JSON.parse(raw); }catch(e){ return {}; }
+}
+function saveAllYearsData(allData){
+  localStorage.setItem(ROOT_STORAGE_KEY, JSON.stringify(allData));
+}
+function saveCurrentYearData(){
+  if(!currentYear || !AppState) return;
+  const allData = loadAllYearsData();
+  AppState.meta.lastUpdated = new Date().toISOString();
+  allData[currentYear] = AppState;
+  saveAllYearsData(allData);
+}
+function autoSave(){
+  saveCurrentYearData();
+}
+function getMostRecentYear(allData){
+  const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
+  return years.length ? years[0] : null;
+}
+function openYear(year){
+  year = String(year);
+  const allData = loadAllYearsData();
+  if(allData[year]){
+    AppState = allData[year];
+    // توافق مع بيانات محفوظة سابقًا (قبل إضافة تاريخ الاشتراك) — لا تُفعّل إلا لو الحقل غير موجود
+    if(!AppState.subscription.startDate) AppState.subscription.startDate = `${year}-01-01`;
+    if(AppState.subscription.extensionDays === undefined) AppState.subscription.extensionDays = 0;
+    if(AppState.subscription.extended === undefined) AppState.subscription.extended = false;
+  } else {
+    AppState = defaultState(year);
+    allData[year] = AppState;
+    saveAllYearsData(allData);
+  }
+  currentYear = year;
+  const currentYearLabel = document.getElementById("currentYearLabel");
+  if(currentYearLabel) currentYearLabel.textContent = currentYear;
+  refreshAllViews();
+}
+
+/* ============================================================
+ * Year Picker Modal — يعرض كل السنوات المحفوظة كـ chips، مع
+ * تمييز السنة الحالية، وخيار "+ إضافة سنة"
+ * ============================================================ */
+function renderYearChipList(){
+  const list = document.getElementById("yearChipList");
+  const allData = loadAllYearsData();
+  const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
+  list.innerHTML = years.map(y =>
+    `<button type="button" class="year-chip${y===currentYear?' current':''}" data-year="${y}">${y}</button>`
+  ).join("");
+}
+function openYearPickerModal(){
+  renderYearChipList();
+  document.getElementById("yearPickerModal").classList.remove("hidden");
+}
+function closeYearPickerModal(){
+  document.getElementById("yearPickerModal").classList.add("hidden");
+}
+
+/* ============================================================
+ * Add Year Modal — بديل prompt(): إدخال أي سنة (ماضية أو مستقبلية)
+ * ============================================================ */
+function openAddYearModal(){
+  const input = document.getElementById("newYearInput");
+  input.value = "";
+  document.getElementById("addYearModal").classList.remove("hidden");
+  input.focus();
+  repositionOpenModalsForKeyboard();
+}
+function closeAddYearModal(){
+  const overlay = document.getElementById("addYearModal");
+  overlay.classList.add("hidden");
+  resetModalViewportStyle(overlay);
+}
+function confirmAddYear(){
+  const input = document.getElementById("newYearInput");
+  const year = Number(input.value.trim());
+  if(!Number.isInteger(year) || year < 1900 || year > 2200){
+    showStatus("سنة غير صحيحة");
+    return;
+  }
+  openYear(String(year));
+  showStatus(`تم فتح سنة ${year} ✓`);
+  closeAddYearModal();
+}
+
+function openAddSubscriptionModal(){
+  document.getElementById("subStartDateInput").value = "";
+  document.getElementById("addSubscriptionModal").classList.remove("hidden");
+  repositionOpenModalsForKeyboard();
+}
+function closeAddSubscriptionModal(){
+  const overlay = document.getElementById("addSubscriptionModal");
+  overlay.classList.add("hidden");
+  resetModalViewportStyle(overlay);
+}
+function openArchiveModal(){
+  const list = document.getElementById("archiveList");
+  const archive = AppState.subscriptionArchive || [];
+  if(archive.length === 0){
+    list.innerHTML = '<div class="empty-state">لا توجد اشتراكات سابقة</div>';
+  } else {
+    // تصنيف الاشتراكات حسب سنة الشراء
+    const byCategory = {};
+    archive.forEach((sub, idx) => {
+      const cat = sub.startDate.slice(0,4);
+      if(!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push({ ...sub, _idx: idx });
+    });
+    list.innerHTML = Object.keys(byCategory).sort((a,b)=>b-a).map((cat) => {
+      const items = byCategory[cat].map((sub) => {
+        return `<div class="year-chip" data-index="${sub._idx}">${sub.startDate.slice(0,4)}</div>`;
+      }).join("");
+      return `<div style="width:100%; margin-bottom:10px;"><div class="year-chip-list">${items}</div></div>`;
+    }).join("");
+  }
+  document.getElementById("archiveModal").classList.remove("hidden");
+}
+function closeArchiveModal(){
+  document.getElementById("archiveModal").classList.add("hidden");
+}
+
+let selectedArchiveIndex = null;
+
+function openArchiveDetailModal(idx){
+  selectedArchiveIndex = idx;
+  const sub = AppState.subscriptionArchive[idx];
+  const end = getSubscriptionEndDate(sub);
+  const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
+  const start = new Date(sub.startDate + "T00:00:00");
+  const startStr = `${start.getFullYear()}.${String(start.getMonth()+1).padStart(2,"0")}.${String(start.getDate()).padStart(2,"0")}`;
+  document.getElementById("archiveDetailContent").innerHTML = `
+    <div>تاريخ الشراء: ${startStr}</div>
+    <div>تاريخ الانتهاء: ${endStr}</div>
+    <div>أيام التمديد: ${sub.extensionDays || 0}</div>
+    <div>عدد الرحلات: ${sub.totalTrips ?? "—"}</div>
+    <div>سعر الاشتراك: ${fmtMoney(sub.annualPrice ?? 0)}</div>
+    <div>تكلفة الرحلة بالترويكا: ${fmtMoney(sub.costWithoutSub ?? 0)}</div>
+    <div>تكلفة الرحلة بالاشتراك السنوي: ${fmtMoney(sub.costPerTrip ?? 0)}</div>
+    <div>متوسط عدد الرحلات في الشهر: ${(sub.avgTripsPerMonth ?? 0).toFixed(1)}</div>
+    <div>الربح والخسارة: ${(sub.totalSavings ?? 0) >= 0 ? "+" : ""}${fmtMoney(sub.totalSavings ?? 0)}</div>
+  `;
+  document.getElementById("archiveDetailModal").classList.remove("hidden");
+}
+function closeArchiveDetailModal(){
+  document.getElementById("archiveDetailModal").classList.add("hidden");
+}
+
+function editArchiveSub(){
+  if(selectedArchiveIndex === null) return;
+  const sub = AppState.subscriptionArchive[selectedArchiveIndex];
+  AppState.subscription.startDate = sub.startDate;
+  AppState.subscription.extensionDays = sub.extensionDays || 0;
+  AppState.subscription.extended = (sub.extensionDays || 0) > 0;
+  AppState.subscription.annualPrice = sub.annualPrice ?? AppState.subscription.annualPrice;
+  pushHistory();
+  autoSave();
+  refreshAllViews();
+  closeArchiveDetailModal();
+  closeArchiveModal();
+  switchView("subscription");
+}
+
+function openConfirmDeleteSubModal(){
+  document.getElementById("confirmDeleteSubModal").classList.remove("hidden");
+}
+function closeConfirmDeleteSubModal(){
+  document.getElementById("confirmDeleteSubModal").classList.add("hidden");
+}
+function confirmDeleteArchiveSub(){
+  if(selectedArchiveIndex === null) return;
+  AppState.subscriptionArchive.splice(selectedArchiveIndex, 1);
+  selectedArchiveIndex = null;
+  pushHistory();
+  autoSave();
+  closeConfirmDeleteSubModal();
+  closeArchiveDetailModal();
+  showStatus("تم حذف الاشتراك ✓");
+  openArchiveModal();
+}
+
+function confirmAddSubscription(){
+  const startVal = document.getElementById("subStartDateInput").value;
+  if(!startVal){
+    showStatus("أدخل تاريخ الشراء");
+    return;
+  }
+  if(AppState.subscription.startDate){
+    if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
+    const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
+    const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
+    AppState.subscriptionArchive.push({
+      startDate: AppState.subscription.startDate,
+      extensionDays: AppState.subscription.extensionDays || 0,
+      totalTrips: r.totalTrips,
+      annualPrice: AppState.subscription.annualPrice,
+      costPerTrip: r.costPerTrip,
+      avgTicketPrice: avgTicketPrice,
+      savingsPerTrip: avgTicketPrice - r.costPerTrip,
+      totalSavings: r.savings,
+      avgTripsPerMonth: r.totalTrips / 12,
+      costWithoutSub: r.costWithoutSub
+    });
+  }
+  AppState.subscription.startDate = startVal;
+  AppState.subscription.extensionDays = 0;
+  AppState.subscription.extended = false;
+  AppState.subscription.annualPrice = 0;
+  MONTH_KEYS.forEach((k) => {
+    AppState.usage.months[k].trips = 0;
+    AppState.subscription.ticketPrice.monthly[k] = 0;
+  });
+  pushHistory();
+  autoSave();
+  refreshAllViews();
+  showStatus("تم إضافة الاشتراك ✓");
+  closeAddSubscriptionModal();
+}
+
+function openExtendSubModal(){
+  const extended = !!AppState.subscription.extended;
+  document.getElementById("btnConfirmExtendSub").style.display = extended ? "none" : "";
+  document.getElementById("btnCancelUndoExtendSub").style.display = extended ? "" : "none";
+  document.getElementById("extendSubModal").classList.remove("hidden");
+}
+function closeExtendSubModal(){
+  document.getElementById("extendSubModal").classList.add("hidden");
+}
+function confirmExtendSub(){
+  if(AppState.subscription.extended) return; // تمديد واحد فقط لكل اشتراك
+  AppState.subscription.extensionDays = Number(AppState.subscription.extensionDays || 0) + 14;
+  AppState.subscription.extended = true;
+  pushHistory();
+  autoSave();
+  refreshAllViews();
+  showStatus("تم تمديد الاشتراك 14 يوم ✓");
+  closeExtendSubModal();
+}
+function undoExtendSub(){
+  AppState.subscription.extensionDays = Number(AppState.subscription.extensionDays || 0) - 14;
+  AppState.subscription.extended = false;
+  pushHistory();
+  autoSave();
+  refreshAllViews();
+  showStatus("تم إلغاء التمديد ✓");
+  closeExtendSubModal();
+}
+
+const btnRefresh = document.getElementById("btnRefresh");
+if(btnRefresh) btnRefresh.addEventListener("click", () => location.reload());
+const btnUndo = document.getElementById("btnUndo");
+if(btnUndo) btnUndo.addEventListener("click", undo);
+const btnRedo = document.getElementById("btnRedo");
+if(btnRedo) btnRedo.addEventListener("click", redo);
+
+const yearBadgeWrap = document.getElementById("yearBadgeWrap");
+if(yearBadgeWrap) yearBadgeWrap.addEventListener("click", openYearPickerModal);
+
+document.getElementById("yearChipList").addEventListener("click", (e) => {
+  const chip = e.target.closest(".year-chip");
+  if(!chip) return;
+  closeYearPickerModal();     // إغلاق فوري
+  openYear(chip.dataset.year); // تبديل فوري وتحديث البيانات — بدون أي زر تأكيد
+});
+
+document.getElementById("btnOpenAddYear").addEventListener("click", () => {
+  closeYearPickerModal();
+  openAddYearModal();
+});
+document.getElementById("btnCancelAddYear").addEventListener("click", closeAddYearModal);
+document.getElementById("btnConfirmAddYear").addEventListener("click", confirmAddYear);
+
+document.getElementById("btnAddSubscription").addEventListener("click", openAddSubscriptionModal);
+document.getElementById("btnCancelAddSubscription").addEventListener("click", closeAddSubscriptionModal);
+document.getElementById("btnConfirmAddSubscription").addEventListener("click", confirmAddSubscription);
+
+document.getElementById("luxCard").addEventListener("click", openExtendSubModal);
+document.getElementById("btnOpenArchive").addEventListener("click", openArchiveModal);
+document.getElementById("btnCloseArchive").addEventListener("click", closeArchiveModal);
+document.getElementById("archiveList").addEventListener("click", (e) => {
+  const chip = e.target.closest(".year-chip");
+  if(!chip) return;
+  openArchiveDetailModal(Number(chip.dataset.index));
+});
+document.getElementById("btnCloseArchiveDetail").addEventListener("click", closeArchiveDetailModal);
+document.getElementById("btnEditArchiveSub").addEventListener("click", editArchiveSub);
+document.getElementById("btnDeleteArchiveSub").addEventListener("click", openConfirmDeleteSubModal);
+document.getElementById("btnCancelDeleteSub").addEventListener("click", closeConfirmDeleteSubModal);
+document.getElementById("btnConfirmDeleteSub").addEventListener("click", confirmDeleteArchiveSub);
+
+document.getElementById("btnCancelExtendSub").addEventListener("click", closeExtendSubModal);
+document.getElementById("btnConfirmExtendSub").addEventListener("click", confirmExtendSub);
+document.getElementById("btnCancelUndoExtendSub").addEventListener("click", undoExtendSub);
+document.getElementById("newYearInput").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") confirmAddYear();
+});
+
+/* ============================================================
+ * Keyboard-aware modal positioning
+ * ------------------------------------------------------------
+ * يبقي أي مودال مفتوح ضمن المساحة المرئية الفعلية للشاشة دائمًا،
+ * حتى لو فتحت لوحة مفاتيح Android جزءًا من الشاشة — بدل ما يُحجب
+ * زر الحفظ/الإضافة خلف الكيبورد. يعتمد على VisualViewport API
+ * المدعومة بمعظم متصفحات الجوال الحديثة؛ تدهور آمن (no-op) لو
+ * غير مدعومة.
+ * ============================================================ */
+function repositionOpenModalsForKeyboard(){
+  if(!window.visualViewport) return;
+  const vv = window.visualViewport;
+  document.querySelectorAll(".modal-overlay:not(.hidden)").forEach(overlay => {
+    overlay.style.top = vv.offsetTop + "px";
+    overlay.style.height = vv.height + "px";
+    overlay.style.bottom = "auto";
+  });
+}
+function resetModalViewportStyle(overlay){
+  overlay.style.top = "";
+  overlay.style.height = "";
+  overlay.style.bottom = "";
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", repositionOpenModalsForKeyboard);
+  window.visualViewport.addEventListener("scroll", repositionOpenModalsForKeyboard);
+}
+
+/* إغلاق أي مودال بالضغط على الخلفية أو Escape — عبر دالة الإغلاق المخصصة لكل مودال
+   (تضمن تنفيذ التحديث/الحفظ المطلوب بدل مجرد إخفاء العنصر) */
+const MODAL_CLOSE_HANDLERS = {
+  yearPickerModal: closeYearPickerModal,
+  addYearModal: closeAddYearModal,
+  addSubscriptionModal: closeAddSubscriptionModal,
+  extendSubModal: closeExtendSubModal,
+  archiveModal: closeArchiveModal,
+  archiveDetailModal: closeArchiveDetailModal,
+  confirmDeleteSubModal: closeConfirmDeleteSubModal,
+  annualPriceModal: closeAnnualPriceModal,
+  tripModal: closeTripModal,
+  priceModal: closePriceModal,
+  statsFilterModal: closeStatsFilterModal
+};
+document.querySelectorAll(".modal-overlay").forEach(overlay => {
+  overlay.addEventListener("click", (e) => {
+    if(e.target !== overlay) return;
+    const closeFn = MODAL_CLOSE_HANDLERS[overlay.id];
+    if(closeFn) closeFn(); else overlay.classList.add("hidden");
+  });
+});
+document.addEventListener("keydown", (e) => {
+  if(e.key === "Escape"){
+    closeYearPickerModal();
+    closeAddYearModal();
+    closeAddSubscriptionModal();
+    closeExtendSubModal();
+    closeArchiveModal();
+    closeArchiveDetailModal();
+    closeConfirmDeleteSubModal();
+    closeAnnualPriceModal();
+    closeTripModal();
+    closePriceModal();
+    closeStatsFilterModal();
+  }
+});
+
+/* ============================================================
+ * 5. UI — Rendering
+ * ============================================================ */
+function renderMonthsTable(){
+  const tbody = document.getElementById("monthsTableBody");
+  tbody.innerHTML = "";
+  MONTH_KEYS.forEach((key, i) => {
+    const trips = AppState.usage.months[key].trips;
+    const price = AppState.subscription.ticketPrice.monthly[key];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="month-name">${MONTH_NAMES[i]}</td>
+      <td>
+        <div class="trip-swipe" data-month="${key}" data-field="trips" data-value="${trips}" data-min="0" data-max="300"
+             tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="300"
+             aria-valuenow="${trips}" aria-label="عدد رحلات ${MONTH_NAMES[i]}">
+          <span class="trip-swipe-value">${trips}</span>
+        </div>
+      </td>
+      <td>
+        <div class="trip-swipe" data-month="${key}" data-field="price" data-value="${price}" data-min="0" data-max="500"
+             tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="500"
+             aria-valuenow="${price}" aria-label="سعر رحلة ${MONTH_NAMES[i]}">
+          <span class="trip-swipe-value">${price}</span>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById("subAnnualPrice").value = AppState.subscription.annualPrice;
+  document.getElementById("subAnnualPriceSummary").textContent = `سعر الاشتراك السنوي: ${fmtMoney(AppState.subscription.annualPrice)}`;
+  document.getElementById("monthsSummaryCount").textContent = getTotalTrips(AppState.usage);
+}
+
+/**
+ * ============================================================
+ * Trip Swipe/Drag Numeric Control
+ * ------------------------------------------------------------
+ * - Pointer Events موحّدة لكل من اللمس والماوس (touch + mouse).
+ * - السحب نسبي من نقطة البداية: يمين = زيادة، يسار = نقصان.
+ * - نقرة/تاب بسيط (بدون تجاوز عتبة الحركة) لا يغيّر القيمة إطلاقًا.
+ * - المدى محصور دائمًا حسب كل عنصر (رحلات: 0-300، سعر: 0-500).
+ * - اهتزاز خفيف (Vibration API) فقط عند الوصول لمضاعفات 5،
+ *   ومرة واحدة فقط لكل قيمة (لا يتكرر أثناء البقاء عليها).
+ * - عنصر <div> وليس <input> → لا تفتح لوحة المفاتيح على الجوال.
+ * ============================================================
+ */
+const DRAG_THRESHOLD_PX = 4;   // أقل مسافة حركة قبل اعتبارها "سحب" فعلي (لتفادي تغيّر القيمة بلمسة بسيطة)
+const DRAG_SENSITIVITY_PX = 4; // عدد البكسلات المطلوبة لتغيير وحدة واحدة — يضبط "إحساس" السحب
+
+/** اهتزاز خفيف جدًا (10-15ms) — فشل صامت لو المتصفح/الجهاز لا يدعم الاهتزاز */
+function triggerHapticTick(){
+  try{
+    if(navigator.vibrate) navigator.vibrate(12);
+  }catch(err){ /* تجاهل صامت — لا داعي لإيقاف التفاعل بسبب هذا */ }
+}
+
+/** يحدّث قيمة عنصر سحب واحد (رحلات أو سعر) + الحالة + الاهتزاز عند مضاعفات 5 */
+function updateTripSwipeValue(el, newValue){
+  const min = Number(el.dataset.min ?? 0);
+  const max = Number(el.dataset.max ?? 300);
+  const clamped = Math.min(max, Math.max(min, newValue));
+  if(clamped === Number(el.dataset.value)) return;
+
+  el.dataset.value = clamped;
+  el.setAttribute("aria-valuenow", clamped);
+  const label = el.querySelector(".trip-swipe-value");
+  if(label) label.textContent = clamped;
+
+  // العناصر المعلَّمة بـ defer-commit (مودالات الرحلات/سعر الترويكا) لا تُكتب على
+  // AppState فورًا أثناء السحب — القيمة تبقى مسودة إلى أن يُضغط "تم"
+  if(el.dataset.deferCommit !== "true"){
+    const key = el.dataset.month;
+    const field = el.dataset.field || "trips";
+    if(field === "trips"){
+      if(AppState.usage.months[key]) AppState.usage.months[key].trips = clamped;
+    } else if(field === "price"){
+      AppState.subscription.ticketPrice.monthly[key] = clamped;
+    }
+    pushHistory();
+    autoSave(); // حفظ فوري وصامت في localStorage (بدون الحاجة لزر حفظ)
+  }
+
+  // اهتزاز فقط عند الوصول لمضاعف 5، ومرة واحدة لكل قيمة (لا تكرار أثناء البقاء عليها)
+  if(clamped % 5 === 0){
+    if(el._lastHapticValue !== clamped){
+      el._lastHapticValue = clamped;
+      triggerHapticTick();
+    }
+  } else {
+    el._lastHapticValue = null;
+  }
+}
+
+function bindTripSwipeEvents(container, onTap){
+  container.addEventListener("pointerdown", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el) return;
+    el.setPointerCapture(e.pointerId);
+    el._drag = { startX: e.clientX, startValue: Number(el.dataset.value), dragging: false };
+    el.classList.add("is-active");
+    e.preventDefault(); // يمنع تحديد النص/التركيز الافتراضي أثناء بدء السحب
+  });
+
+  container.addEventListener("pointermove", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el || !el._drag) return;
+
+    const deltaX = e.clientX - el._drag.startX;
+
+    // نقرة/تاب بسيط بدون تجاوز العتبة → لا يُعتبر سحبًا، والقيمة لا تتغيّر
+    if(!el._drag.dragging && Math.abs(deltaX) < DRAG_THRESHOLD_PX) return;
+
+    el._drag.dragging = true;
+    el.classList.add("dragging");
+
+    const newValue = el._drag.startValue + Math.round(deltaX / DRAG_SENSITIVITY_PX);
+    updateTripSwipeValue(el, newValue);
+  });
+
+  container.addEventListener("pointerup", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el || !el._drag) return;
+    const wasDragging = el._drag.dragging;
+    el.classList.remove("is-active", "dragging");
+    el._drag = null;
+    // نقرة بسيطة (بدون سحب فعلي) → تفتح مودال التعديل المخصص، إن وُجدت دالة onTap لهذه الحاوية
+    if(!wasDragging && onTap) onTap(el.dataset.month, el.dataset.field || "trips");
+  });
+  container.addEventListener("pointercancel", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el) return;
+    el.classList.remove("is-active", "dragging");
+    el._drag = null; // إلغاء الإيماءة لا يفتح المودال ولا يغيّر القيمة
+  });
+
+  // منع تحديد النص أثناء السحب (طبقة حماية إضافية فوق CSS user-select)
+  container.addEventListener("selectstart", (e) => {
+    if(e.target.closest(".trip-swipe")) e.preventDefault();
+  });
+
+  // دعم لوحة المفاتيح للوصولية (اختياري، متوافق مع role="slider")
+  container.addEventListener("keydown", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el) return;
+    if(e.key === "ArrowRight" || e.key === "ArrowUp"){
+      e.preventDefault();
+      updateTripSwipeValue(el, Number(el.dataset.value) + 1);
+    } else if(e.key === "ArrowLeft" || e.key === "ArrowDown"){
+      e.preventDefault();
+      updateTripSwipeValue(el, Number(el.dataset.value) - 1);
+    } else if((e.key === "Enter" || e.key === " ") && onTap){
+      e.preventDefault();
+      onTap(el.dataset.month, el.dataset.field || "trips");
+    }
+  });
+}
+
+/** يفتح المودال المخصص عند نقرة/تاب بسيطة فقط — بدون أي سحب مباشر على حقل الجدول
+ *  (طريقة الإدخال الوحيدة لحقلي الرحلات وسعر الترويكا أصبحت عبر المودال) */
+function bindTableTapOpen(container, onTap){
+  container.addEventListener("click", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el || !onTap) return;
+    onTap(el.dataset.month, el.dataset.field || "trips");
+  });
+
+  // دعم لوحة المفاتيح للوصولية: Enter/Space يفتحان المودال أيضًا (بدون تغيير القيمة مباشرة)
+  container.addEventListener("keydown", (e) => {
+    const el = e.target.closest(".trip-swipe");
+    if(!el || !onTap) return;
+    if(e.key === "Enter" || e.key === " "){
+      e.preventDefault();
+      onTap(el.dataset.month, el.dataset.field || "trips");
+    }
+  });
+}
+
+function bindMonthsTableEvents(){
+  bindTableTapOpen(document.getElementById("monthsTableBody"), handleSwipeTap);
+  bindTripSwipeEvents(document.getElementById("tripModalSwipeWrap"), null);
+  bindTripSwipeEvents(document.getElementById("priceModalSwipeWrap"), null);
+
+  document.getElementById("subAnnualPrice").addEventListener("click", openAnnualPriceModal);
+  document.getElementById("subAnnualPriceSummary").addEventListener("click", openAnnualPriceModal);
+  document.getElementById("monthsSummaryToggle").addEventListener("click", () => {
+    const t = document.getElementById("monthsTable");
+    t.style.display = (t.style.display === "none") ? "" : "none";
+  });
+  document.getElementById("detailsSummaryToggle").addEventListener("click", () => {
+    const g = document.getElementById("resultsGrid");
+    g.style.display = (g.style.display === "none") ? "grid" : "none";
+  });
+}
+
+/** يفتح المودال الصحيح حسب نوع الحقل الذي نُقر عليه بالجدول (رحلات أو سعر) */
+function handleSwipeTap(monthKey, field){
+  if(field === "price") openPriceModal(monthKey);
+  else openTripModal(monthKey);
+}
+
+/* ============================================================
+ * Monthly Trips Modal — يعيد استخدام نفس منطق السحب (trip-swipe)
+ * بنسخة مكبّرة داخل مودال مخصص
+ * ============================================================ */
+function openTripModal(monthKey){
+  const trips = AppState.usage.months[monthKey].trips;
+  const monthIndex = MONTH_KEYS.indexOf(monthKey);
+
+  document.getElementById("tripModalTitle").textContent = `الرحلات الشهرية — ${MONTH_NAMES[monthIndex]}`;
+
+  const modalSwipe = document.getElementById("tripModalSwipe");
+  modalSwipe.dataset.month = monthKey;
+  modalSwipe.dataset.value = trips;
+  modalSwipe.setAttribute("aria-valuenow", trips);
+  modalSwipe.setAttribute("aria-label", `عدد رحلات ${MONTH_NAMES[monthIndex]}`);
+  modalSwipe.querySelector(".trip-swipe-value").textContent = trips;
+  modalSwipe._lastHapticValue = null;
+
+  document.getElementById("tripModal").classList.remove("hidden");
+}
+function closeTripModal(){
+  // إغلاق بحت بدون أي حفظ — يُستخدم للنقر خارج المودال، Escape، وزر "إلغاء"
+  const overlay = document.getElementById("tripModal");
+  overlay.classList.add("hidden");
+  resetModalViewportStyle(overlay);
+}
+function commitTripModal(){
+  // يُستخدم فقط عند الضغط على "تم": يحفظ القيمة المسودة فعليًا، يعيد الحساب، ثم يغلق
+  const modalSwipe = document.getElementById("tripModalSwipe");
+  const key = modalSwipe.dataset.month;
+  const value = Number(modalSwipe.dataset.value);
+
+  if(key && AppState.usage.months[key]){
+    AppState.usage.months[key].trips = value;
+    pushHistory();
+    autoSave();
+  }
+
+  renderMonthsTable();          // تحديث فوري لعرض الجدول (Refresh UI)
+  renderSubscriptionResults();  // إعادة حساب فورية (Auto Calculate)
+  showAutosaveToast("Results updated");
+  closeTripModal();
+}
+
+/* ============================================================
+ * Troika Price Modal — نفس مودال الرحلات الشهرية تمامًا بنفس
+ * سلوك التأجيل حتى الضغط على "تم" (سلوك وشكل متطابقان تمامًا)
+ * ============================================================ */
+function openPriceModal(monthKey){
+  const price = AppState.subscription.ticketPrice.monthly[monthKey];
+  const monthIndex = MONTH_KEYS.indexOf(monthKey);
+
+  document.getElementById("priceModalTitle").textContent = `سعر الرحلة بالترويكا — ${MONTH_NAMES[monthIndex]}`;
+
+  const modalSwipe = document.getElementById("priceModalSwipe");
+  modalSwipe.dataset.month = monthKey;
+  modalSwipe.dataset.value = price;
+  modalSwipe.setAttribute("aria-valuenow", price);
+  modalSwipe.setAttribute("aria-label", `سعر رحلة ${MONTH_NAMES[monthIndex]}`);
+  modalSwipe.querySelector(".trip-swipe-value").textContent = price;
+  modalSwipe._lastHapticValue = null;
+
+  document.getElementById("priceModal").classList.remove("hidden");
+}
+function closePriceModal(){
+  // إغلاق بحت بدون أي حفظ — يُستخدم للنقر خارج المودال، Escape، وزر "إلغاء"
+  const overlay = document.getElementById("priceModal");
+  overlay.classList.add("hidden");
+  resetModalViewportStyle(overlay);
+}
+function commitPriceModal(){
+  // يُستخدم فقط عند الضغط على "تم": يحفظ القيمة المسودة فعليًا، يعيد الحساب، ثم يغلق
+  const modalSwipe = document.getElementById("priceModalSwipe");
+  const key = modalSwipe.dataset.month;
+  const value = Number(modalSwipe.dataset.value);
+
+  if(key){
+    AppState.subscription.ticketPrice.monthly[key] = value;
+    pushHistory();
+    autoSave();
+  }
+
+  renderMonthsTable();          // تحديث فوري لعرض الجدول (Refresh UI)
+  renderSubscriptionResults();  // إعادة حساب فورية (Auto Calculate)
+  showAutosaveToast("Results recalculated");
+  closePriceModal();
+}
+
+/* ============================================================
+ * Annual Price Modal — حقل قابل للتعديل مع لوحة مفاتيح رقمية،
+ * والحقل الأصلي بالصفحة أصبح للعرض فقط
+ * ============================================================ */
+function openAnnualPriceModal(){
+  const modalInput = document.getElementById("annualPriceModalInput");
+  modalInput.value = AppState.subscription.annualPrice;
+  document.getElementById("annualPriceModal").classList.remove("hidden");
+  modalInput.focus();
+  modalInput.select();
+  repositionOpenModalsForKeyboard();
+}
+function closeAnnualPriceModal(){
+  const overlay = document.getElementById("annualPriceModal");
+  overlay.classList.add("hidden");
+  resetModalViewportStyle(overlay);
+}
+function saveAnnualPrice(){
+  const modalInput = document.getElementById("annualPriceModalInput");
+  let raw = modalInput.value.trim();
+  if(raw.length > 6) raw = raw.slice(0, 6);
+  const value = Number(raw) || 0;
+
+  AppState.subscription.annualPrice = value;
+  document.getElementById("subAnnualPrice").value = value;
+  document.getElementById("subAnnualPriceSummary").textContent = `سعر الاشتراك السنوي: ${fmtMoney(value)}`;
+  autoSave();                    // حفظ فوري وصامت
+  renderSubscriptionResults();   // إعادة حساب فورية
+  closeAnnualPriceModal();
+  showStatus("تم حفظ سعر الاشتراك ✓");
+  showAutosaveToast("Subscription updated");
+}
+
+document.getElementById("btnDoneTripModal").addEventListener("click", commitTripModal);
+document.getElementById("btnDonePriceModal").addEventListener("click", commitPriceModal);
+document.getElementById("btnCancelAnnualPrice").addEventListener("click", closeAnnualPriceModal);
+document.getElementById("btnSaveAnnualPrice").addEventListener("click", saveAnnualPrice);
+document.getElementById("annualPriceModalInput").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") saveAnnualPrice();
+});
+
+function fmtMoney(n){ return Number(n).toLocaleString("en-US") + " ₽"; }
+
+function renderSubscriptionResults(){
+  const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
+  const sEl = document.getElementById("rSavings");
+  sEl.textContent = (r.savings>=0?"+":"") + fmtMoney(r.savings);
+  sEl.className = "value mono " + (r.savings>=0 ? "good":"bad");
+  document.getElementById("rCostPerTrip").textContent = fmtMoney(r.costPerTrip);
+
+  document.getElementById("rTroikaCost").textContent = fmtMoney(r.costWithoutSub);
+  document.getElementById("rAvgTripsPerMonth").textContent = (r.totalTrips / 12).toFixed(1);
+}
+
+/* ============================================================
+ * Statistics View — Dashboard كامل (بطاقات + 3 رسوم بيانية)
+ * يعيد استخدام calculateSubscriptionValue كما هي دون أي تعديل
+ * على منطق الحساب — فقط يجمّع نتائجها عبر السنوات المخزّنة.
+ * ============================================================ */
+let statsChartCompareInstance = null;
+let statsChartTripsInstance = null;
+let compareChartType = "bar"; // "bar" | "line" — لا يغيّر البيانات، فقط طريقة العرض
+
+/** يحسب ملخص سنة واحدة اعتمادًا على نفس دالة الحساب المالي الموجودة أصلاً */
+/** يرجع ملخصات كل فترات الاشتراك (الحالية + المؤرشفة) عبر كل السنوات المخزّنة */
+function getAllSubscriptionSummaries(){
+  const allData = loadAllYearsData();
+  const entries = [];
+  Object.keys(allData).sort((a,b)=>Number(a)-Number(b)).forEach((year) => {
+    const state = allData[year];
+    if(state.subscription && state.subscription.startDate){
+      const r = calculateSubscriptionValue(state.usage, state.subscription);
+      const end = getSubscriptionEndDate(state.subscription);
+      const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
+      entries.push({
+        id: `${year}-current`,
+        label: state.subscription.startDate.slice(0,4),
+        totalTrips: r.totalTrips,
+        costWithSub: r.costWithSub,
+        costWithoutSub: r.costWithoutSub,
+        savings: r.savings
+      });
+    }
+    if(Array.isArray(state.subscriptionArchive)){
+      state.subscriptionArchive.forEach((sub, idx) => {
+        const end = getSubscriptionEndDate(sub);
+        const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
+        entries.push({
+          id: `${year}-archive-${idx}`,
+          label: sub.startDate.slice(0,4),
+          totalTrips: sub.totalTrips ?? 0,
+          costWithSub: sub.annualPrice ?? 0,
+          costWithoutSub: sub.costWithoutSub ?? 0,
+          savings: sub.totalSavings ?? 0
+        });
+      });
+    }
+  });
+  return entries;
+}
+
+/* ============================================================
+ * Statistics Filter Modal — كل السنوات / سنة واحدة / عدة سنوات
+ * التحديث لا يحدث إلا بعد الضغط على "تطبيق"
+ * ============================================================ */
+let statsAppliedScope = "all"; // "all" أو مصفوفة معرّفات اشتراكات محددة
+let statsTempScope = "all";    // نسخة عمل مؤقتة أثناء فتح المودال فقط
+
+function openStatsFilterModal(){
+  statsTempScope = statsAppliedScope === "all" ? "all" : [...statsAppliedScope];
+  renderStatsFilterChips();
+  document.getElementById("statsFilterModal").classList.remove("hidden");
+}
+function closeStatsFilterModal(){
+  document.getElementById("statsFilterModal").classList.add("hidden");
+}
+function renderStatsFilterChips(){
+  const list = document.getElementById("statsFilterChipList");
+  const subs = getAllSubscriptionSummaries();
+  const isAllMode = statsTempScope === "all";
+
+  let html = `<button type="button" class="year-chip${isAllMode?' current':''}" data-id="all">جميع الاشتراكات</button>`;
+  html += subs.map((s) => {
+    const selected = !isAllMode && statsTempScope.includes(s.id);
+    return `<button type="button" class="year-chip${selected?' current':''}" data-id="${s.id}">${s.label}</button>`;
+  }).join("");
+  list.innerHTML = html;
+}
+function applyStatsFilter(){
+  statsAppliedScope = statsTempScope === "all" ? "all" : [...statsTempScope];
+  closeStatsFilterModal();
+  updateStatsFilterButtonLabel();
+  renderStatistics();
+}
+function updateStatsFilterButtonLabel(){
+  const btn = document.getElementById("statsFilterBtn");
+  if(statsAppliedScope === "all") btn.textContent = "جميع الاشتراكات";
+  else if(statsAppliedScope.length === 1){
+    const s = getAllSubscriptionSummaries().find(x=>x.id===statsAppliedScope[0]);
+    btn.textContent = s ? s.label : "اشتراك محدد";
+  }
+  else btn.textContent = `${statsAppliedScope.length} اشتراكات محددة`;
+}
+
+document.getElementById("statsFilterBtn").addEventListener("click", openStatsFilterModal);
+document.getElementById("btnCancelStatsFilter").addEventListener("click", closeStatsFilterModal);
+document.getElementById("btnApplyStatsFilter").addEventListener("click", applyStatsFilter);
+document.getElementById("statsFilterChipList").addEventListener("click", (e) => {
+  const chip = e.target.closest(".year-chip");
+  if(!chip) return;
+  const id = chip.dataset.id;
+  if(id === "all"){
+    statsTempScope = "all";
+  } else if(statsTempScope === "all"){
+    statsTempScope = [id];
+  } else {
+    const idx = statsTempScope.indexOf(id);
+    if(idx === -1) statsTempScope.push(id); else statsTempScope.splice(idx, 1);
+    if(statsTempScope.length === 0) statsTempScope = "all"; // بديل بديهي بدل عرض فارغ
+  }
+  renderStatsFilterChips();
+});
+
+
+function renderStatistics(){
+  updateStatsFilterButtonLabel();
+  const allSummaries = getAllSubscriptionSummaries();
+  const summaries = statsAppliedScope === "all"
+    ? allSummaries
+    : allSummaries.filter(s => statsAppliedScope.includes(s.id));
+
+  renderStatsCards(summaries);
+  renderStatsCharts(summaries);
+}
+
+function renderStatsCards(summaries){
+  const totalTrips = summaries.reduce((s,x)=>s + x.totalTrips, 0);
+  const totalSubCost = summaries.reduce((s,x)=>s + x.costWithSub, 0);
+  const totalTroikaCost = summaries.reduce((s,x)=>s + x.costWithoutSub, 0);
+  const totalSavings = summaries.reduce((s,x)=>s + x.savings, 0);
+  const avgCostPerTrip = totalTrips > 0 ? totalSubCost / totalTrips : 0;
+
+  document.getElementById("statsTotalTrips").textContent = totalTrips;
+  document.getElementById("statsTotalSubCost").textContent = fmtMoney(totalSubCost);
+  document.getElementById("statsTotalTroikaCost").textContent = fmtMoney(totalTroikaCost);
+
+  const savingsEl = document.getElementById("statsTotalSavings");
+  savingsEl.textContent = (totalSavings >= 0 ? "+" : "") + fmtMoney(totalSavings);
+  savingsEl.className = "value mono " + (totalSavings >= 0 ? "good" : "bad");
+
+  document.getElementById("statsAvgCostPerTrip").textContent = fmtMoney(Number(avgCostPerTrip.toFixed(2)));
+
+  const avgTripsPerMonth = summaries.length > 0 ? totalTrips / (summaries.length * 12) : 0;
+  document.getElementById("statsAvgTripsPerMonth").textContent = avgTripsPerMonth.toFixed(1);
+}
+
+function renderStatsCharts(summaries){
+  const labels = summaries.map(s => s.label);
+  const style = getComputedStyle(document.documentElement);
+  const accent = style.getPropertyValue('--accent').trim() || "#a97a2f";
+
+  /* 1) تكلفة الاشتراك مقابل الترويكا — نفس البيانات، نوع الرسم قابل للتبديل (bar/line) */
+  const compareCanvas = document.getElementById("statsChartCompare");
+  if(statsChartCompareInstance) statsChartCompareInstance.destroy();
+
+  const isLine = compareChartType === "line";
+  statsChartCompareInstance = new Chart(compareCanvas.getContext("2d"), {
+    type: compareChartType,
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "تكلفة الاشتراك", data: summaries.map(s=>s.costWithSub),
+          backgroundColor: accent, borderColor: accent,
+          borderRadius: isLine ? 0 : 6, fill:false, tension:0.25
+        },
+        {
+          label: "تكلفة الترويكا", data: summaries.map(s=>s.costWithoutSub),
+          backgroundColor: "#cfc7b4", borderColor: "#cfc7b4",
+          borderRadius: isLine ? 0 : 6, fill:false, tension:0.25
+        }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:"bottom" } }, scales:{ y:{ beginAtZero:true } } }
+  });
+
+  /* 2) عدد الرحلات لكل سنة */
+  const tripsCanvas = document.getElementById("statsChartTrips");
+  if(statsChartTripsInstance) statsChartTripsInstance.destroy();
+  statsChartTripsInstance = new Chart(tripsCanvas.getContext("2d"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "عدد الرحلات", data: summaries.map(s=>s.totalTrips), backgroundColor: accent, borderRadius: 6 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+  });
+}
+
+document.getElementById("btnToggleCompareChartType").addEventListener("click", () => {
+  compareChartType = compareChartType === "bar" ? "line" : "bar";
+  renderStatistics();
+});
+
+/* ============================================================
+ * 6. UI — Actions
+ * ============================================================ */
+function showStatus(msg){
+  const bar = document.getElementById("statusBar");
+  bar.textContent = msg;
+  bar.classList.add("show");
+  clearTimeout(showStatus._t);
+  showStatus._t = setTimeout(()=>bar.classList.remove("show"), 2200);
+}
+
+/* Small, non-blocking toast shown after an automatic recalculation.
+ * Reuses the same element for rapid successive changes instead of stacking. */
+function showAutosaveToast(msg){
+  const toast = document.getElementById("autosaveToast");
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(showAutosaveToast._t);
+  showAutosaveToast._t = setTimeout(()=>toast.classList.remove("show"), 1000);
+}
+
+/* View Switching — unified for top tabs and bottom nav */
+const VIEW_ORDER = ["subscription", "statistics"]; // ترتيب الصفحات لتحديد اتجاه السحب/الانزلاق
+
+function switchView(viewName, instant){
+  const current = document.querySelector(".view.active")?.id?.replace("view-","");
+  if(current === viewName) return; // نفس الصفحة، لا داعي لأي انتقال
+
+  let direction = "forward";
+  if(current){
+    const fromIdx = VIEW_ORDER.indexOf(current);
+    const toIdx = VIEW_ORDER.indexOf(viewName);
+    direction = toIdx < fromIdx ? "backward" : "forward";
+  }
+
+  document.querySelectorAll(".tab-btn").forEach(b=>{
+    b.classList.remove("active");
+    b.setAttribute("aria-selected", "false");
+  });
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active", "enter-forward", "enter-backward"));
+  document.querySelectorAll(".bottom-nav button").forEach(b=>{
+    b.classList.remove("active");
+    b.removeAttribute("aria-current");
+  });
+
+  document.querySelectorAll(`.tab-btn[data-view="${viewName}"]`).forEach(b=>{
+    b.classList.add("active");
+    b.setAttribute("aria-selected", "true");
+  });
+  document.querySelectorAll(`.bottom-nav button[data-view="${viewName}"]`).forEach(b=>{
+    b.classList.add("active");
+    b.setAttribute("aria-current", "page");
+  });
+
+  const newView = document.getElementById("view-"+viewName);
+  newView.classList.add("active");
+  if(!instant){
+    newView.classList.add(direction === "backward" ? "enter-backward" : "enter-forward");
+  }
+
+  if(viewName === "statistics") renderStatistics();
+  localStorage.setItem(LAST_VIEW_KEY, viewName);
+}
+
+function getLastView(){
+  return localStorage.getItem(LAST_VIEW_KEY) || "subscription";
+}
+
+/* Top tabs */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+/* Bottom navigation */
+document.querySelectorAll(".bottom-nav button").forEach(btn => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+/* Export / Import JSON (لسنة واحدة — السنة المفتوحة حاليًا) */
+const btnExport = document.getElementById("btnExport");
+if(btnExport) btnExport.addEventListener("click", () => {
+  const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
+
+  const monthlySheetData = [
+    ["الشهر", "عدد الرحلات", "سعر الرحلة بالترويكا (₽)"]
+  ];
+  MONTH_KEYS.forEach((key, i) => {
+    monthlySheetData.push([
+      MONTH_NAMES[i],
+      AppState.usage.months[key].trips,
+      AppState.subscription.ticketPrice.monthly[key]
+    ]);
+  });
+
+  const summarySheetData = [
+    ["البند", "القيمة"],
+    ["السنة", currentYear],
+    ["سعر الاشتراك السنوي (₽)", AppState.subscription.annualPrice],
+    ["إجمالي الرحلات", r.totalTrips],
+    ["التكلفة بدون اشتراك (₽)", r.costWithoutSub],
+    ["تكلفة الاشتراك (₽)", r.costWithSub],
+    ["الوفر / الخسارة (₽)", r.savings],
+    ["نسبة الوفر (%)", r.savingsPercent],
+    ["التكلفة لكل رحلة (₽)", r.costPerTrip],
+    ["رحلات التعادل", r.breakEvenTrips],
+    ["الحكم النهائي", r.verdict]
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(monthlySheetData), "البيانات الشهرية");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summarySheetData), "الملخص المالي");
+
+  XLSX.writeFile(wb, `metro-subscription-${currentYear}.xlsx`);
+  showStatus("تم تصدير ملف Excel ✓");
+});
+/** يعرض تاريخ انتهاء الاشتراك والأيام المتبقية بالبطاقة الفاخرة */
+function renderLuxuryCard(){
+  const endDate = getSubscriptionEndDate(AppState.subscription);
+  const y = endDate.getFullYear();
+  const m = String(endDate.getMonth()+1).padStart(2,"0");
+  const d = String(endDate.getDate()).padStart(2,"0");
+  document.getElementById("luxEndDate").textContent = `${y}.${m}.${d}`;
+
+  const remaining = getRemainingDays(AppState.subscription);
+  document.getElementById("luxRemainingDays").textContent = `الأيام المتبقية: ${remaining} يوم`;
+}
+
+function refreshAllViews(){
+  renderMonthsTable();
+  renderSubscriptionResults();
+  renderLuxuryCard();
+}
+
+/* ============================================================
+ * Swipe Navigation — between pages
+ * ============================================================ */
+/* ============================================================
+ * PWA Install Button
+ * ============================================================ */
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById("btnInstall");
+
+if(installBtn && (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true)){
+  installBtn.style.display = "none";
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+
+  if (
+    installBtn &&
+    !(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true)
+  ) {
+    installBtn.style.display = "block";
+  }
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  if(installBtn) installBtn.style.display = "none";
+});
+
+if(installBtn){
+  installBtn.addEventListener("click", async () => {
+    if(!deferredInstallPrompt){ showStatus("التثبيت غير متاح حاليًا"); return; }
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if(outcome === "accepted"){
+      showStatus("تم تثبيت التطبيق ✓");
+      installBtn.style.display = "none";
+    }
+    deferredInstallPrompt = null;
+  });
+}
+
+/* ============================================================
+ * Service Worker Registration
+ * ============================================================ */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+
+(function init(){
+  bindMonthsTableEvents();
+  const allData = loadAllYearsData();
+  const mostRecent = getMostRecentYear(allData);
+  if(mostRecent){
+    openYear(mostRecent);
+  } else {
+    openYear(String(new Date().getFullYear()));
+  }
+  switchView(getLastView(), true); // استعادة آخر صفحة مفتوحة فورًا بدون أنيميشن
+})();
+
+</script>
+</body>
+</html>
