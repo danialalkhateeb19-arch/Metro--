@@ -498,7 +498,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   <div class="modal-box">
     <h2>إضافة اشتراك</h2>
     <label for="subStartDateInput" class="modal-input-label">تاريخ شراء الاشتراك</label>
-    <input type="date" id="subStartDateInput" class="lux-date-input" style="margin-bottom:14px;">
+    <input type="date" id="subStartDateInput" class="lux-date-input" min="2010-01-01" max="2035-12-31" style="margin-bottom:14px;">
     <button class="btn primary modal-full" id="btnConfirmAddSubscription" style="margin-top:14px; margin-bottom:10px;">إضافة</button>
     <button class="btn modal-full" id="btnCancelAddSubscription">إلغاء</button>
   </div>
@@ -550,12 +550,6 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     </div>
 
     <div class="panel">
-      <h2>إعدادات الاشتراك</h2>
-      <div class="accordion-summary" id="subAnnualPriceSummary">سعر الاشتراك السنوي: — ₽</div>
-      <input type="number" id="subAnnualPrice" value="25000" style="display:none;">
-    </div>
-
-    <div class="panel">
       <h2>البيانات الشهرية</h2>
       <div class="accordion-summary" id="monthsSummaryToggle">عدد الرحلات : <span id="monthsSummaryCount">0</span></div>
       <table class="months-table" id="monthsTable" style="display:none;">
@@ -568,6 +562,12 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
         </thead>
         <tbody id="monthsTableBody"></tbody>
       </table>
+    </div>
+
+    <div class="panel">
+      <h2>إعدادات الاشتراك</h2>
+      <div class="accordion-summary" id="subAnnualPriceSummary">سعر الاشتراك السنوي: — ₽</div>
+      <input type="number" id="subAnnualPrice" value="25000" style="display:none;">
     </div>
 
     <div class="panel">
@@ -656,6 +656,7 @@ function defaultState(year){
       extensionDays: 0,
       extended: false
     },
+    editingArchiveIndex: null,
     meta: { version: "1.0", createdAt: new Date().toISOString(), lastUpdated: null, schemaVersion: 1 }
   };
 }
@@ -799,7 +800,46 @@ function saveCurrentYearData(){
   saveAllYearsData(allData);
 }
 function autoSave(){
+  syncEditingArchiveEntry();
   saveCurrentYearData();
+}
+/** يبني سجل أرشيف من بيانات الاشتراك الحيّة الحالية (نسخة عميقة كاملة) */
+function buildArchiveEntryFromLive(){
+  const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
+  const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
+  return {
+    startDate: AppState.subscription.startDate,
+    extensionDays: AppState.subscription.extensionDays || 0,
+    totalTrips: r.totalTrips,
+    annualPrice: AppState.subscription.annualPrice,
+    costPerTrip: r.costPerTrip,
+    avgTicketPrice: avgTicketPrice,
+    savingsPerTrip: avgTicketPrice - r.costPerTrip,
+    totalSavings: r.savings,
+    avgTripsPerMonth: r.totalTrips / 12,
+    costWithoutSub: r.costWithoutSub,
+    months: JSON.parse(JSON.stringify(AppState.usage.months)),
+    ticketPriceMonthly: JSON.parse(JSON.stringify(AppState.subscription.ticketPrice.monthly))
+  };
+}
+/** يحفظ بيانات الاشتراك الحيّة في الأرشيف: يحدّث السجل قيد التعديل إن وُجد، وإلا يضيف سجلاً جديدًا */
+function commitLiveSubscriptionToArchive(){
+  if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
+  const entry = buildArchiveEntryFromLive();
+  const idx = AppState.editingArchiveIndex;
+  if(idx !== null && idx !== undefined && AppState.subscriptionArchive[idx]){
+    AppState.subscriptionArchive[idx] = entry;
+  } else {
+    AppState.subscriptionArchive.push(entry);
+  }
+}
+/** يُستدعى مع كل autoSave: يبقي سجل الأرشيف قيد التعديل (إن وُجد) متطابقًا لحظيًا مع أي تغيير (رحلات/سعر/تمديد...) */
+function syncEditingArchiveEntry(){
+  if(!AppState) return;
+  const idx = AppState.editingArchiveIndex;
+  if(idx === null || idx === undefined) return;
+  if(!Array.isArray(AppState.subscriptionArchive) || !AppState.subscriptionArchive[idx]) return;
+  AppState.subscriptionArchive[idx] = buildArchiveEntryFromLive();
 }
 function getMostRecentYear(allData){
   const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
@@ -937,10 +977,20 @@ function closeArchiveDetailModal(){
 function editArchiveSub(){
   if(selectedArchiveIndex === null) return;
   const sub = AppState.subscriptionArchive[selectedArchiveIndex];
+  if(AppState.subscription.startDate && AppState.subscription.startDate !== sub.startDate){
+    commitLiveSubscriptionToArchive();
+  }
+  AppState.editingArchiveIndex = selectedArchiveIndex;
   AppState.subscription.startDate = sub.startDate;
   AppState.subscription.extensionDays = sub.extensionDays || 0;
   AppState.subscription.extended = (sub.extensionDays || 0) > 0;
   AppState.subscription.annualPrice = sub.annualPrice ?? AppState.subscription.annualPrice;
+  if(sub.months){
+    AppState.usage.months = JSON.parse(JSON.stringify(sub.months));
+  }
+  if(sub.ticketPriceMonthly){
+    AppState.subscription.ticketPrice.monthly = JSON.parse(JSON.stringify(sub.ticketPriceMonthly));
+  }
   pushHistory();
   autoSave();
   refreshAllViews();
@@ -958,6 +1008,13 @@ function closeConfirmDeleteSubModal(){
 function confirmDeleteArchiveSub(){
   if(selectedArchiveIndex === null) return;
   AppState.subscriptionArchive.splice(selectedArchiveIndex, 1);
+  if(AppState.editingArchiveIndex !== null && AppState.editingArchiveIndex !== undefined){
+    if(AppState.editingArchiveIndex === selectedArchiveIndex){
+      AppState.editingArchiveIndex = null;
+    } else if(AppState.editingArchiveIndex > selectedArchiveIndex){
+      AppState.editingArchiveIndex--;
+    }
+  }
   selectedArchiveIndex = null;
   pushHistory();
   autoSave();
@@ -974,22 +1031,9 @@ function confirmAddSubscription(){
     return;
   }
   if(AppState.subscription.startDate){
-    if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
-    const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
-    const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
-    AppState.subscriptionArchive.push({
-      startDate: AppState.subscription.startDate,
-      extensionDays: AppState.subscription.extensionDays || 0,
-      totalTrips: r.totalTrips,
-      annualPrice: AppState.subscription.annualPrice,
-      costPerTrip: r.costPerTrip,
-      avgTicketPrice: avgTicketPrice,
-      savingsPerTrip: avgTicketPrice - r.costPerTrip,
-      totalSavings: r.savings,
-      avgTripsPerMonth: r.totalTrips / 12,
-      costWithoutSub: r.costWithoutSub
-    });
+    commitLiveSubscriptionToArchive();
   }
+  AppState.editingArchiveIndex = null;
   AppState.subscription.startDate = startVal;
   AppState.subscription.extensionDays = 0;
   AppState.subscription.extended = false;
