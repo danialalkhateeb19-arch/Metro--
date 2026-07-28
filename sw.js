@@ -1,5 +1,7 @@
 const CACHE_NAME = 'metro-app-v7';
 
+/* مسارات نسبية (./) — تعمل على أي مستودع GitHub Pages مهما كان اسمه.
+   التطبيق ملف واحد، فلا وجود لـ style.css أو script.js منفصلين. */
 const urlsToCache = [
   './',
   './index.html',
@@ -11,13 +13,9 @@ const urlsToCache = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return Promise.all(
-        urlsToCache.map((url) =>
-          cache.add(url).catch((err) => {
-            console.warn('Cache skip:', url, err);
-          })
-        )
-      );
+      return cache.addAll(urlsToCache).catch((err) => {
+        console.warn('Cache error:', err);
+      });
     })
   );
 
@@ -69,6 +67,7 @@ self.addEventListener('fetch', (event) => {
 
         })
         .catch(() => {
+          // أي طلب تنقّل (فتح الصفحة) بدون إنترنت يُخدَم من النسخة المحفوظة
           if (event.request.mode === 'navigate') {
             return caches.match('./index.html');
           }

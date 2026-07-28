@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --bg: #f7f7f5;
@@ -395,6 +396,24 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
 }
 .chart-card-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .chart-card-header h2{ margin:0; }
+
+/* ===== Google Drive Backup ===== */
+.backup-status{
+  background: var(--bg-panel-2); border:1px solid var(--border);
+  border-radius:8px; padding:12px 14px; margin-bottom:14px;
+  font-size:.85rem; line-height:1.9; color:var(--text-dim);
+}
+.backup-status b{ color:var(--text); font-weight:700; }
+.backup-status .dot-state{
+  display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:#c0392b; margin-inline-end:6px;
+}
+.backup-status.connected .dot-state{ background: var(--good); }
+.backup-setup-note{
+  font-size:.8rem; color:var(--text-dim); line-height:1.9;
+  background:var(--accent-bg); border:1px solid var(--accent);
+  border-radius:8px; padding:12px 14px; margin-bottom:14px;
+}
 </style>
 </head>
 <body>
@@ -410,6 +429,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
 
   <div class="header-left">
     <button class="btn" id="btnOpenArchive" title="أرشيف الاشتراكات">الأرشيف</button>
+    <button class="btn" id="btnOpenBackup" title="النسخ الاحتياطي على جوجل درايف">☁️ النسخ الاحتياطي</button>
     <button class="btn primary" id="btnInstall" title="تثبيت التطبيق">تثبيت التطبيق</button>
   </div>
 </header>
@@ -498,7 +518,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   <div class="modal-box">
     <h2>إضافة اشتراك</h2>
     <label for="subStartDateInput" class="modal-input-label">تاريخ شراء الاشتراك</label>
-    <input type="date" id="subStartDateInput" class="lux-date-input" min="2010-01-01" max="2035-12-31" style="margin-bottom:14px;">
+    <input type="date" id="subStartDateInput" class="lux-date-input" style="margin-bottom:14px;">
     <button class="btn primary modal-full" id="btnConfirmAddSubscription" style="margin-top:14px; margin-bottom:10px;">إضافة</button>
     <button class="btn modal-full" id="btnCancelAddSubscription">إلغاء</button>
   </div>
@@ -531,6 +551,36 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   </div>
 </div>
 
+<!-- ============ Google Drive Backup Modal ============ -->
+<div class="modal-overlay hidden" id="backupModal">
+  <div class="modal-box">
+    <h2>النسخ الاحتياطي — جوجل درايف</h2>
+    <div class="backup-setup-note" id="backupSetupNote" style="display:none;">
+      لم يتم إعداد جوجل درايف بعد. افتح ملف <b>index.html</b> وضع معرّف العميل (Client ID) مكان
+      <b>268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com</b> في أعلى الكود.
+    </div>
+    <div class="backup-status" id="backupStatus">
+      <div><span class="dot-state"></span><b id="backupStateText">غير متصل</b></div>
+      <div id="backupAccountText" style="display:none;"></div>
+      <div>آخر نسخة: <b id="backupLastText">—</b></div>
+    </div>
+    <button class="btn primary modal-full" id="btnDriveConnect" style="margin-bottom:10px;">الاتصال بجوجل درايف</button>
+    <button class="btn modal-full" id="btnDriveBackupNow" style="margin-bottom:10px; display:none;">رفع نسخة الآن</button>
+    <button class="btn modal-full" id="btnDriveRestore" style="margin-bottom:10px; display:none;">استعادة البيانات من النسخة</button>
+    <button class="btn modal-full" id="btnDriveDisconnect" style="margin-bottom:10px; display:none;">قطع الاتصال</button>
+    <button class="btn modal-full" id="btnCloseBackup">إغلاق</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="confirmRestoreModal">
+  <div class="modal-box">
+    <h2>تأكيد الاستعادة</h2>
+    <p style="font-size:.9rem; color:var(--text-dim); margin-bottom:16px;">سيتم استبدال كل البيانات الموجودة على هذا الجهاز بالنسخة المحفوظة في جوجل درايف. هل تريد المتابعة؟</p>
+    <button class="btn primary modal-full" id="btnConfirmRestore" style="margin-bottom:10px;">نعم، استعد النسخة</button>
+    <button class="btn modal-full" id="btnCancelRestore">تراجع</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="confirmDeleteSubModal">
   <div class="modal-box">
     <h2>تأكيد الحذف</h2>
@@ -550,6 +600,12 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     </div>
 
     <div class="panel">
+      <h2>إعدادات الاشتراك</h2>
+      <div class="accordion-summary" id="subAnnualPriceSummary">سعر الاشتراك السنوي: — ₽</div>
+      <input type="number" id="subAnnualPrice" value="25000" style="display:none;">
+    </div>
+
+    <div class="panel">
       <h2>البيانات الشهرية</h2>
       <div class="accordion-summary" id="monthsSummaryToggle">عدد الرحلات : <span id="monthsSummaryCount">0</span></div>
       <table class="months-table" id="monthsTable" style="display:none;">
@@ -562,12 +618,6 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
         </thead>
         <tbody id="monthsTableBody"></tbody>
       </table>
-    </div>
-
-    <div class="panel">
-      <h2>إعدادات الاشتراك</h2>
-      <div class="accordion-summary" id="subAnnualPriceSummary">سعر الاشتراك السنوي: — ₽</div>
-      <input type="number" id="subAnnualPrice" value="25000" style="display:none;">
     </div>
 
     <div class="panel">
@@ -638,6 +688,55 @@ const MONTH_KEYS = ["01","02","03","04","05","06","07","08","09","10","11","12"]
 const ROOT_STORAGE_KEY = "metroAppData";
 const LAST_VIEW_KEY = "metroAppLastView";
 
+/* ============================================================
+ * ⚙️ إعداد جوجل درايف — الشيء الوحيد الذي تحتاج تغييره يدويًا
+ * ------------------------------------------------------------
+ * ضع معرّف العميل (OAuth Client ID) الذي حصلت عليه من
+ * Google Cloud Console مكان النص الموجود بالأسفل بين علامتي التنصيص.
+ * شكله يشبه: 1234567890-abcdefg.apps.googleusercontent.com
+ * ============================================================ */
+const GOOGLE_CLIENT_ID = "268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com";
+
+/* ============================================================
+ * البيانات السابقة (2023 – 2026) — تُزرع تلقائيًا مرة واحدة فقط
+ * عند فتح التطبيق على جهاز فارغ (بدون أي بيانات محفوظة).
+ * المصدر: ملف Excel "المترو".
+ * ملاحظة: كل اشتراك في الملف يمتد 13 صفًا (شهر البداية يتكرر في
+ * النهاية)، والتطبيق يعمل بـ 12 شهرًا، لذلك جُمع الشهر المتكرر مع
+ * نظيره حفاظًا على إجمالي الرحلات كما هو تمامًا في الملف.
+ * ============================================================ */
+const SEED_SUBSCRIPTIONS = [
+  { year:"2026", startDate:"2026-03-01", annualPrice:24900, troika:75,
+    trips:{ "04":20, "05":47, "06":48 } },                                  // إجمالي 115
+  { year:"2025", startDate:"2025-03-01", annualPrice:22000, troika:68,
+    trips:{ "03":27, "04":22, "05":34, "06":42, "07":55, "08":42,
+            "09":42, "10":40, "11":8, "12":33, "01":39, "02":38 } },        // إجمالي 422
+  { year:"2024", startDate:"2024-02-01", annualPrice:19500, troika:57,
+    trips:{ "02":36, "03":46, "04":54, "05":52, "06":82, "07":44,
+            "08":36, "09":45, "10":42, "11":40, "12":37, "01":39 } },       // إجمالي 553
+  { year:"2023", startDate:"2023-02-01", annualPrice:19500, troika:49.5,
+    trips:{ "02":81, "03":55, "04":20, "05":56, "06":47, "07":50,
+            "08":53, "09":50, "10":45, "11":47, "12":58, "01":12 } }        // إجمالي 574
+];
+
+/** يبني بيانات السنوات السابقة ويحفظها — فقط إذا كان التخزين فارغًا تمامًا */
+function seedInitialDataIfEmpty(){
+  if(localStorage.getItem(ROOT_STORAGE_KEY)) return false;
+  const allData = {};
+  SEED_SUBSCRIPTIONS.forEach((s) => {
+    const state = defaultState(s.year);
+    state.subscription.annualPrice = s.annualPrice;
+    state.subscription.startDate = s.startDate;
+    MONTH_KEYS.forEach((k) => {
+      state.usage.months[k].trips = Number(s.trips[k] || 0);
+      state.subscription.ticketPrice.monthly[k] = s.troika;
+    });
+    allData[s.year] = state;
+  });
+  saveAllYearsData(allData);
+  return true;
+}
+
 function defaultState(year){
   const months = {};
   const monthlyPrices = {};
@@ -656,7 +755,6 @@ function defaultState(year){
       extensionDays: 0,
       extended: false
     },
-    editingArchiveIndex: null,
     meta: { version: "1.0", createdAt: new Date().toISOString(), lastUpdated: null, schemaVersion: 1 }
   };
 }
@@ -798,48 +896,10 @@ function saveCurrentYearData(){
   AppState.meta.lastUpdated = new Date().toISOString();
   allData[currentYear] = AppState;
   saveAllYearsData(allData);
+  scheduleDriveBackup(); // نسخة احتياطية تلقائية (تعمل فقط عند الاتصال بجوجل درايف)
 }
 function autoSave(){
-  syncEditingArchiveEntry();
   saveCurrentYearData();
-}
-/** يبني سجل أرشيف من بيانات الاشتراك الحيّة الحالية (نسخة عميقة كاملة) */
-function buildArchiveEntryFromLive(){
-  const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
-  const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
-  return {
-    startDate: AppState.subscription.startDate,
-    extensionDays: AppState.subscription.extensionDays || 0,
-    totalTrips: r.totalTrips,
-    annualPrice: AppState.subscription.annualPrice,
-    costPerTrip: r.costPerTrip,
-    avgTicketPrice: avgTicketPrice,
-    savingsPerTrip: avgTicketPrice - r.costPerTrip,
-    totalSavings: r.savings,
-    avgTripsPerMonth: r.totalTrips / 12,
-    costWithoutSub: r.costWithoutSub,
-    months: JSON.parse(JSON.stringify(AppState.usage.months)),
-    ticketPriceMonthly: JSON.parse(JSON.stringify(AppState.subscription.ticketPrice.monthly))
-  };
-}
-/** يحفظ بيانات الاشتراك الحيّة في الأرشيف: يحدّث السجل قيد التعديل إن وُجد، وإلا يضيف سجلاً جديدًا */
-function commitLiveSubscriptionToArchive(){
-  if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
-  const entry = buildArchiveEntryFromLive();
-  const idx = AppState.editingArchiveIndex;
-  if(idx !== null && idx !== undefined && AppState.subscriptionArchive[idx]){
-    AppState.subscriptionArchive[idx] = entry;
-  } else {
-    AppState.subscriptionArchive.push(entry);
-  }
-}
-/** يُستدعى مع كل autoSave: يبقي سجل الأرشيف قيد التعديل (إن وُجد) متطابقًا لحظيًا مع أي تغيير (رحلات/سعر/تمديد...) */
-function syncEditingArchiveEntry(){
-  if(!AppState) return;
-  const idx = AppState.editingArchiveIndex;
-  if(idx === null || idx === undefined) return;
-  if(!Array.isArray(AppState.subscriptionArchive) || !AppState.subscriptionArchive[idx]) return;
-  AppState.subscriptionArchive[idx] = buildArchiveEntryFromLive();
 }
 function getMostRecentYear(allData){
   const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
@@ -977,20 +1037,10 @@ function closeArchiveDetailModal(){
 function editArchiveSub(){
   if(selectedArchiveIndex === null) return;
   const sub = AppState.subscriptionArchive[selectedArchiveIndex];
-  if(AppState.subscription.startDate && AppState.subscription.startDate !== sub.startDate){
-    commitLiveSubscriptionToArchive();
-  }
-  AppState.editingArchiveIndex = selectedArchiveIndex;
   AppState.subscription.startDate = sub.startDate;
   AppState.subscription.extensionDays = sub.extensionDays || 0;
   AppState.subscription.extended = (sub.extensionDays || 0) > 0;
   AppState.subscription.annualPrice = sub.annualPrice ?? AppState.subscription.annualPrice;
-  if(sub.months){
-    AppState.usage.months = JSON.parse(JSON.stringify(sub.months));
-  }
-  if(sub.ticketPriceMonthly){
-    AppState.subscription.ticketPrice.monthly = JSON.parse(JSON.stringify(sub.ticketPriceMonthly));
-  }
   pushHistory();
   autoSave();
   refreshAllViews();
@@ -1008,13 +1058,6 @@ function closeConfirmDeleteSubModal(){
 function confirmDeleteArchiveSub(){
   if(selectedArchiveIndex === null) return;
   AppState.subscriptionArchive.splice(selectedArchiveIndex, 1);
-  if(AppState.editingArchiveIndex !== null && AppState.editingArchiveIndex !== undefined){
-    if(AppState.editingArchiveIndex === selectedArchiveIndex){
-      AppState.editingArchiveIndex = null;
-    } else if(AppState.editingArchiveIndex > selectedArchiveIndex){
-      AppState.editingArchiveIndex--;
-    }
-  }
   selectedArchiveIndex = null;
   pushHistory();
   autoSave();
@@ -1031,17 +1074,25 @@ function confirmAddSubscription(){
     return;
   }
   if(AppState.subscription.startDate){
-    commitLiveSubscriptionToArchive();
+    if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
+    const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
+    const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
+    AppState.subscriptionArchive.push({
+      startDate: AppState.subscription.startDate,
+      extensionDays: AppState.subscription.extensionDays || 0,
+      totalTrips: r.totalTrips,
+      annualPrice: AppState.subscription.annualPrice,
+      costPerTrip: r.costPerTrip,
+      avgTicketPrice: avgTicketPrice,
+      savingsPerTrip: avgTicketPrice - r.costPerTrip,
+      totalSavings: r.savings,
+      avgTripsPerMonth: r.totalTrips / 12,
+      costWithoutSub: r.costWithoutSub
+    });
   }
-  AppState.editingArchiveIndex = null;
   AppState.subscription.startDate = startVal;
   AppState.subscription.extensionDays = 0;
   AppState.subscription.extended = false;
-  AppState.subscription.annualPrice = 0;
-  MONTH_KEYS.forEach((k) => {
-    AppState.usage.months[k].trips = 0;
-    AppState.subscription.ticketPrice.monthly[k] = 0;
-  });
   pushHistory();
   autoSave();
   refreshAllViews();
@@ -1168,7 +1219,9 @@ const MODAL_CLOSE_HANDLERS = {
   annualPriceModal: closeAnnualPriceModal,
   tripModal: closeTripModal,
   priceModal: closePriceModal,
-  statsFilterModal: closeStatsFilterModal
+  statsFilterModal: closeStatsFilterModal,
+  backupModal: closeBackupModal,
+  confirmRestoreModal: closeConfirmRestoreModal
 };
 document.querySelectorAll(".modal-overlay").forEach(overlay => {
   overlay.addEventListener("click", (e) => {
@@ -1190,6 +1243,8 @@ document.addEventListener("keydown", (e) => {
     closeTripModal();
     closePriceModal();
     closeStatsFilterModal();
+    closeBackupModal();
+    closeConfirmRestoreModal();
   }
 });
 
@@ -1906,8 +1961,240 @@ if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 
+/* ============================================================
+ * Google Drive Backup
+ * ------------------------------------------------------------
+ * - يحفظ نسخة كاملة من كل السنوات في ملف واحد اسمه metro-backup.json
+ *   داخل جوجل درايف الخاص بك.
+ * - الصلاحية المطلوبة هي drive.file فقط: التطبيق يرى ويعدّل الملف
+ *   الذي أنشأه هو فقط، ولا يستطيع الوصول لأي ملف آخر في الدرايف.
+ * - النسخ تلقائي وصامت بعد أي تعديل (بتأخير بسيط لتجميع التعديلات).
+ * ============================================================ */
+const DRIVE_FILE_NAME = "metro-backup.json";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_TOKEN_KEY = "metroDriveToken";
+const DRIVE_LAST_BACKUP_KEY = "metroDriveLastBackup";
+const DRIVE_FILE_ID_KEY = "metroDriveFileId";
+const DRIVE_AUTO_DELAY_MS = 4000;
+
+let driveTokenClient = null;
+let driveAccessToken = null;
+let driveTokenExpiry = 0;
+let driveBackupTimer = null;
+let driveBusy = false;
+
+function isDriveConfigured(){
+  return GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.indexOf("PUT_YOUR_GOOGLE") === -1;
+}
+function isDriveConnected(){
+  return !!driveAccessToken && Date.now() < driveTokenExpiry;
+}
+
+function loadStoredDriveToken(){
+  try{
+    const raw = localStorage.getItem(DRIVE_TOKEN_KEY);
+    if(!raw) return;
+    const t = JSON.parse(raw);
+    if(t && t.token && Date.now() < t.expiry){
+      driveAccessToken = t.token;
+      driveTokenExpiry = t.expiry;
+    }
+  }catch(e){ /* تجاهل صامت */ }
+}
+function storeDriveToken(token, expiresInSec){
+  driveAccessToken = token;
+  driveTokenExpiry = Date.now() + (Number(expiresInSec || 3600) - 60) * 1000;
+  localStorage.setItem(DRIVE_TOKEN_KEY, JSON.stringify({ token: driveAccessToken, expiry: driveTokenExpiry }));
+}
+function clearDriveToken(){
+  driveAccessToken = null;
+  driveTokenExpiry = 0;
+  localStorage.removeItem(DRIVE_TOKEN_KEY);
+}
+
+function initDriveClient(){
+  if(driveTokenClient || !isDriveConfigured()) return;
+  if(!(window.google && google.accounts && google.accounts.oauth2)) return;
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: (resp) => {
+      if(resp && resp.access_token){
+        storeDriveToken(resp.access_token, resp.expires_in);
+        renderBackupModal();
+        showStatus("تم الاتصال بجوجل درايف ✓");
+        driveBackupNow(true);
+      }
+    },
+    error_callback: () => showStatus("تعذّر الاتصال بجوجل درايف")
+  });
+}
+
+function driveConnect(){
+  initDriveClient();
+  if(!driveTokenClient){ showStatus("خدمة جوجل غير متاحة حاليًا"); return; }
+  driveTokenClient.requestAccessToken({ prompt: driveAccessToken ? "" : "consent" });
+}
+function driveDisconnect(){
+  clearDriveToken();
+  renderBackupModal();
+  showStatus("تم قطع الاتصال");
+}
+
+async function driveFetch(url, options){
+  const opts = options || {};
+  opts.headers = Object.assign({ Authorization: "Bearer " + driveAccessToken }, opts.headers || {});
+  const res = await fetch(url, opts);
+  if(res.status === 401 || res.status === 403){
+    clearDriveToken();
+    throw new Error("انتهت صلاحية الاتصال بجوجل درايف");
+  }
+  if(!res.ok) throw new Error("خطأ في جوجل درايف (" + res.status + ")");
+  return res;
+}
+
+/** يبحث عن ملف النسخة الاحتياطية ويعيد معرّفه (أو null إن لم يوجد) */
+async function findDriveBackupFile(){
+  const cachedId = localStorage.getItem(DRIVE_FILE_ID_KEY);
+  if(cachedId){
+    try{
+      await driveFetch("https://www.googleapis.com/drive/v3/files/" + cachedId + "?fields=id,trashed");
+      return cachedId;
+    }catch(e){ localStorage.removeItem(DRIVE_FILE_ID_KEY); }
+  }
+  const q = encodeURIComponent("name='" + DRIVE_FILE_NAME + "' and trashed=false");
+  const res = await driveFetch("https://www.googleapis.com/drive/v3/files?q=" + q + "&spaces=drive&fields=files(id,modifiedTime)");
+  const data = await res.json();
+  if(data.files && data.files.length){
+    localStorage.setItem(DRIVE_FILE_ID_KEY, data.files[0].id);
+    return data.files[0].id;
+  }
+  return null;
+}
+
+/** يرفع نسخة كاملة من كل السنوات إلى جوجل درايف */
+async function driveBackupNow(silent){
+  if(!isDriveConnected() || driveBusy) return;
+  driveBusy = true;
+  try{
+    const payload = JSON.stringify({
+      app: "metro-subscription",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      data: loadAllYearsData()
+    });
+
+    let fileId = await findDriveBackupFile();
+
+    if(fileId){
+      await driveFetch("https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: payload
+      });
+    } else {
+      const boundary = "metroBoundary" + Date.now();
+      const body =
+        "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" +
+        JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: "application/json" }) +
+        "\r\n--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" +
+        payload + "\r\n--" + boundary + "--";
+      const res = await driveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+        method: "POST",
+        headers: { "Content-Type": "multipart/related; boundary=" + boundary },
+        body: body
+      });
+      const created = await res.json();
+      if(created.id) localStorage.setItem(DRIVE_FILE_ID_KEY, created.id);
+    }
+
+    localStorage.setItem(DRIVE_LAST_BACKUP_KEY, new Date().toISOString());
+    renderBackupModal();
+    if(silent) showAutosaveToast("تم حفظ نسخة على درايف");
+    else showStatus("تم رفع النسخة الاحتياطية ✓");
+  }catch(err){
+    renderBackupModal();
+    if(!silent) showStatus(err.message || "فشل رفع النسخة");
+  }finally{
+    driveBusy = false;
+  }
+}
+
+/** نسخ تلقائي مؤجّل — يجمّع التعديلات المتتابعة في رفعة واحدة */
+function scheduleDriveBackup(){
+  if(!isDriveConnected()) return;
+  clearTimeout(driveBackupTimer);
+  driveBackupTimer = setTimeout(() => driveBackupNow(true), DRIVE_AUTO_DELAY_MS);
+}
+
+/** يستعيد كل البيانات من النسخة المحفوظة في الدرايف ثم يعيد تحميل التطبيق */
+async function driveRestore(){
+  if(!isDriveConnected()){ showStatus("اتصل بجوجل درايف أولًا"); return; }
+  try{
+    const fileId = await findDriveBackupFile();
+    if(!fileId){ showStatus("لا توجد نسخة محفوظة على الدرايف"); return; }
+    const res = await driveFetch("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+    const backup = await res.json();
+    if(!backup || !backup.data){ showStatus("ملف النسخة غير صالح"); return; }
+    localStorage.setItem(ROOT_STORAGE_KEY, JSON.stringify(backup.data));
+    showStatus("تمت الاستعادة ✓");
+    setTimeout(() => location.reload(), 600);
+  }catch(err){
+    showStatus(err.message || "فشلت الاستعادة");
+  }
+}
+
+/* ===== Backup Modal UI ===== */
+function renderBackupModal(){
+  const configured = isDriveConfigured();
+  const connected = isDriveConnected();
+
+  document.getElementById("backupSetupNote").style.display = configured ? "none" : "";
+  document.getElementById("backupStatus").classList.toggle("connected", connected);
+  document.getElementById("backupStateText").textContent = connected ? "متصل بجوجل درايف" : "غير متصل";
+
+  const last = localStorage.getItem(DRIVE_LAST_BACKUP_KEY);
+  document.getElementById("backupLastText").textContent = last
+    ? new Date(last).toLocaleString("ar-EG", { dateStyle:"short", timeStyle:"short" })
+    : "—";
+
+  document.getElementById("btnDriveConnect").style.display = connected ? "none" : "";
+  document.getElementById("btnDriveConnect").disabled = !configured;
+  document.getElementById("btnDriveBackupNow").style.display = connected ? "" : "none";
+  document.getElementById("btnDriveRestore").style.display = connected ? "" : "none";
+  document.getElementById("btnDriveDisconnect").style.display = connected ? "" : "none";
+}
+function openBackupModal(){
+  initDriveClient();
+  renderBackupModal();
+  document.getElementById("backupModal").classList.remove("hidden");
+}
+function closeBackupModal(){
+  document.getElementById("backupModal").classList.add("hidden");
+}
+function openConfirmRestoreModal(){
+  document.getElementById("confirmRestoreModal").classList.remove("hidden");
+}
+function closeConfirmRestoreModal(){
+  document.getElementById("confirmRestoreModal").classList.add("hidden");
+}
+
+document.getElementById("btnOpenBackup").addEventListener("click", openBackupModal);
+document.getElementById("btnCloseBackup").addEventListener("click", closeBackupModal);
+document.getElementById("btnDriveConnect").addEventListener("click", driveConnect);
+document.getElementById("btnDriveDisconnect").addEventListener("click", driveDisconnect);
+document.getElementById("btnDriveBackupNow").addEventListener("click", () => driveBackupNow(false));
+document.getElementById("btnDriveRestore").addEventListener("click", openConfirmRestoreModal);
+document.getElementById("btnCancelRestore").addEventListener("click", closeConfirmRestoreModal);
+document.getElementById("btnConfirmRestore").addEventListener("click", () => {
+  closeConfirmRestoreModal();
+  closeBackupModal();
+  driveRestore();
+});
+
 (function init(){
   bindMonthsTableEvents();
+  const seeded = seedInitialDataIfEmpty(); // زرع بيانات 2023–2026 عند أول تشغيل فقط
   const allData = loadAllYearsData();
   const mostRecent = getMostRecentYear(allData);
   if(mostRecent){
@@ -1916,6 +2203,10 @@ if("serviceWorker" in navigator){
     openYear(String(new Date().getFullYear()));
   }
   switchView(getLastView(), true); // استعادة آخر صفحة مفتوحة فورًا بدون أنيميشن
+
+  loadStoredDriveToken();
+  window.addEventListener("load", initDriveClient);
+  if(seeded) showStatus("تم تحميل بيانات السنوات السابقة ✓");
 })();
 
 </script>
