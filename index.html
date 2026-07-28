@@ -545,8 +545,6 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   <div class="modal-box">
     <h2>تفاصيل الاشتراك</h2>
     <div id="archiveDetailContent" style="margin-bottom:14px; line-height:2;"></div>
-    <button class="btn primary modal-full" id="btnEditArchiveSub" style="margin-bottom:10px;">تعديل</button>
-    <button class="btn modal-full" id="btnDeleteArchiveSub" style="margin-bottom:10px; color:#c0392b; border-color:#c0392b;">حذف الاشتراك</button>
     <button class="btn modal-full" id="btnCloseArchiveDetail">إغلاق</button>
   </div>
 </div>
@@ -557,7 +555,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     <h2>النسخ الاحتياطي — جوجل درايف</h2>
     <div class="backup-setup-note" id="backupSetupNote" style="display:none;">
       لم يتم إعداد جوجل درايف بعد. افتح ملف <b>index.html</b> وضع معرّف العميل (Client ID) مكان
-      <b>PUT_YOUR_GOOGLE_CLIENT_ID_HERE</b> في أعلى الكود.
+      <b>268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com</b> في أعلى الكود.
     </div>
     <div class="backup-status" id="backupStatus">
       <div><span class="dot-state"></span><b id="backupStateText">غير متصل</b></div>
@@ -578,15 +576,6 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     <p style="font-size:.9rem; color:var(--text-dim); margin-bottom:16px;">سيتم استبدال كل البيانات الموجودة على هذا الجهاز بالنسخة المحفوظة في جوجل درايف. هل تريد المتابعة؟</p>
     <button class="btn primary modal-full" id="btnConfirmRestore" style="margin-bottom:10px;">نعم، استعد النسخة</button>
     <button class="btn modal-full" id="btnCancelRestore">تراجع</button>
-  </div>
-</div>
-
-<div class="modal-overlay hidden" id="confirmDeleteSubModal">
-  <div class="modal-box">
-    <h2>تأكيد الحذف</h2>
-    <p style="font-size:.9rem; color:var(--text-dim); margin-bottom:16px;">هل أنت متأكد أنك تريد حذف هذا الاشتراك؟</p>
-    <button class="btn primary modal-full" id="btnConfirmDeleteSub" style="margin-bottom:10px; background:#c0392b; border-color:#c0392b;">نعم، احذف</button>
-    <button class="btn modal-full" id="btnCancelDeleteSub">تراجع</button>
   </div>
 </div>
 
@@ -695,7 +684,7 @@ const LAST_VIEW_KEY = "metroAppLastView";
  * Google Cloud Console مكان النص الموجود بالأسفل بين علامتي التنصيص.
  * شكله يشبه: 1234567890-abcdefg.apps.googleusercontent.com
  * ============================================================ */
-const GOOGLE_CLIENT_ID = "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
+const GOOGLE_CLIENT_ID = "268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com";
 
 /* ============================================================
  * البيانات السابقة (2023 – 2026) — تُزرع تلقائيًا مرة واحدة فقط
@@ -706,18 +695,43 @@ const GOOGLE_CLIENT_ID = "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
  * نظيره حفاظًا على إجمالي الرحلات كما هو تمامًا في الملف.
  * ============================================================ */
 const SEED_SUBSCRIPTIONS = [
-  { year:"2026", startDate:"2026-03-01", annualPrice:24900, troika:75,
+  { year:"2026", startDate:"2026-04-20", annualPrice:24900, troika:75,
     trips:{ "04":20, "05":47, "06":48 } },                                  // إجمالي 115
-  { year:"2025", startDate:"2025-03-01", annualPrice:22000, troika:68,
+  { year:"2025", startDate:"2025-04-20", annualPrice:22000, troika:68,
     trips:{ "03":27, "04":22, "05":34, "06":42, "07":55, "08":42,
             "09":42, "10":40, "11":8, "12":33, "01":39, "02":38 } },        // إجمالي 422
-  { year:"2024", startDate:"2024-02-01", annualPrice:19500, troika:57,
+  { year:"2024", startDate:"2024-04-20", annualPrice:19500, troika:57,
     trips:{ "02":36, "03":46, "04":54, "05":52, "06":82, "07":44,
             "08":36, "09":45, "10":42, "11":40, "12":37, "01":39 } },       // إجمالي 553
-  { year:"2023", startDate:"2023-02-01", annualPrice:19500, troika:49.5,
+  { year:"2023", startDate:"2023-04-20", annualPrice:19500, troika:49.5,
     trips:{ "02":81, "03":55, "04":20, "05":56, "06":47, "07":50,
             "08":53, "09":50, "10":45, "11":47, "12":58, "01":12 } }        // إجمالي 574
 ];
+
+/* ============================================================
+ * تصحيح تواريخ الشراء لمرة واحدة على الأجهزة التي زُرعت فيها
+ * البيانات بالتواريخ القديمة المُخمَّنة. يُطبَّق فقط إذا كان
+ * التاريخ المحفوظ ما زال هو التاريخ القديم بالضبط — أي تاريخ
+ * عدّلته بنفسك يبقى كما هو ولا يُمس.
+ * ============================================================ */
+const DATE_FIX_KEY = "metroSeedDatesFixed_v1";
+const SEED_OLD_DATES = { "2026":"2026-03-01", "2025":"2025-03-01", "2024":"2024-02-01", "2023":"2023-02-01" };
+
+function fixSeededStartDatesOnce(){
+  if(localStorage.getItem(DATE_FIX_KEY)) return false;
+  const allData = loadAllYearsData();
+  let changed = 0;
+  SEED_SUBSCRIPTIONS.forEach((s) => {
+    const st = allData[s.year];
+    if(st && st.subscription && st.subscription.startDate === SEED_OLD_DATES[s.year]){
+      st.subscription.startDate = s.startDate;
+      changed++;
+    }
+  });
+  localStorage.setItem(DATE_FIX_KEY, "1");
+  if(changed) saveAllYearsData(allData);
+  return changed > 0;
+}
 
 /* علامة تُكتب مرة واحدة فقط بعد نجاح الزرع — تمنع رجوع أي سنة حذفتها لاحقًا */
 const SEED_FLAG_KEY = "metroSeedApplied_v1";
@@ -1007,25 +1021,21 @@ function closeAddSubscriptionModal(){
   overlay.classList.add("hidden");
   resetModalViewportStyle(overlay);
 }
+/* ============================================================
+ * الأرشيف — يعرض كل الاشتراكات عبر كل السنوات، كل واحد باسم
+ * سنة شرائه. النقر عليه يفتح التفاصيل للعرض فقط (بدون تعديل أو حذف).
+ * يعتمد على نفس مصدر بيانات الإحصائيات، فلا يمكن أن يختلفا.
+ * ============================================================ */
 function openArchiveModal(){
   const list = document.getElementById("archiveList");
-  const archive = AppState.subscriptionArchive || [];
-  if(archive.length === 0){
-    list.innerHTML = '<div class="empty-state">لا توجد اشتراكات سابقة</div>';
+  const subs = getAllSubscriptionSummaries().slice().sort((a,b)=>b.startDate.localeCompare(a.startDate));
+
+  if(subs.length === 0){
+    list.innerHTML = '<div style="font-size:.85rem; color:var(--text-dim);">لا توجد اشتراكات</div>';
   } else {
-    // تصنيف الاشتراكات حسب سنة الشراء
-    const byCategory = {};
-    archive.forEach((sub, idx) => {
-      const cat = sub.startDate.slice(0,4);
-      if(!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push({ ...sub, _idx: idx });
-    });
-    list.innerHTML = Object.keys(byCategory).sort((a,b)=>b-a).map((cat) => {
-      const items = byCategory[cat].map((sub) => {
-        return `<div class="year-chip" data-index="${sub._idx}">${sub.startDate.slice(0,4)}</div>`;
-      }).join("");
-      return `<div style="width:100%; margin-bottom:10px;"><div class="year-chip-list">${items}</div></div>`;
-    }).join("");
+    list.innerHTML = subs.map((s) =>
+      `<button type="button" class="year-chip" data-id="${s.id}">${s.label}</button>`
+    ).join("");
   }
   document.getElementById("archiveModal").classList.remove("hidden");
 }
@@ -1033,63 +1043,31 @@ function closeArchiveModal(){
   document.getElementById("archiveModal").classList.add("hidden");
 }
 
-let selectedArchiveIndex = null;
+function openArchiveDetailModal(id){
+  const sub = getAllSubscriptionSummaries().find(x => x.id === id);
+  if(!sub) return;
 
-function openArchiveDetailModal(idx){
-  selectedArchiveIndex = idx;
-  const sub = AppState.subscriptionArchive[idx];
-  const end = getSubscriptionEndDate(sub);
-  const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
   const start = new Date(sub.startDate + "T00:00:00");
   const startStr = `${start.getFullYear()}.${String(start.getMonth()+1).padStart(2,"0")}.${String(start.getDate()).padStart(2,"0")}`;
+  const end = getSubscriptionEndDate({ startDate: sub.startDate, extensionDays: sub.extensionDays });
+  const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
+
   document.getElementById("archiveDetailContent").innerHTML = `
     <div>تاريخ الشراء: ${startStr}</div>
     <div>تاريخ الانتهاء: ${endStr}</div>
-    <div>أيام التمديد: ${sub.extensionDays || 0}</div>
-    <div>عدد الرحلات: ${sub.totalTrips ?? "—"}</div>
-    <div>سعر الاشتراك: ${fmtMoney(sub.annualPrice ?? 0)}</div>
-    <div>تكلفة الرحلة بالترويكا: ${fmtMoney(sub.costWithoutSub ?? 0)}</div>
-    <div>تكلفة الرحلة بالاشتراك السنوي: ${fmtMoney(sub.costPerTrip ?? 0)}</div>
-    <div>متوسط عدد الرحلات في الشهر: ${(sub.avgTripsPerMonth ?? 0).toFixed(1)}</div>
-    <div>الربح والخسارة: ${(sub.totalSavings ?? 0) >= 0 ? "+" : ""}${fmtMoney(sub.totalSavings ?? 0)}</div>
+    <div>أيام التمديد: ${sub.extensionDays}</div>
+    <div>إجمالي عدد الرحلات: ${sub.totalTrips}</div>
+    <div>سعر الاشتراك: ${fmtMoney(sub.costWithSub)}</div>
+    <div>سعر الرحلة بالترويكا: ${fmtMoney(sub.avgTicketPrice)}</div>
+    <div>تكلفة الرحلة بالاشتراك: ${fmtMoney(sub.costPerTrip)}</div>
+    <div>تكلفة كل الرحلات بالترويكا: ${fmtMoney(sub.costWithoutSub)}</div>
+    <div>متوسط الرحلات بالشهر: ${(sub.totalTrips / 12).toFixed(1)}</div>
+    <div>الربح والخسارة: ${sub.savings >= 0 ? "+" : ""}${fmtMoney(sub.savings)}</div>
   `;
   document.getElementById("archiveDetailModal").classList.remove("hidden");
 }
 function closeArchiveDetailModal(){
   document.getElementById("archiveDetailModal").classList.add("hidden");
-}
-
-function editArchiveSub(){
-  if(selectedArchiveIndex === null) return;
-  const sub = AppState.subscriptionArchive[selectedArchiveIndex];
-  AppState.subscription.startDate = sub.startDate;
-  AppState.subscription.extensionDays = sub.extensionDays || 0;
-  AppState.subscription.extended = (sub.extensionDays || 0) > 0;
-  AppState.subscription.annualPrice = sub.annualPrice ?? AppState.subscription.annualPrice;
-  pushHistory();
-  autoSave();
-  refreshAllViews();
-  closeArchiveDetailModal();
-  closeArchiveModal();
-  switchView("subscription");
-}
-
-function openConfirmDeleteSubModal(){
-  document.getElementById("confirmDeleteSubModal").classList.remove("hidden");
-}
-function closeConfirmDeleteSubModal(){
-  document.getElementById("confirmDeleteSubModal").classList.add("hidden");
-}
-function confirmDeleteArchiveSub(){
-  if(selectedArchiveIndex === null) return;
-  AppState.subscriptionArchive.splice(selectedArchiveIndex, 1);
-  selectedArchiveIndex = null;
-  pushHistory();
-  autoSave();
-  closeConfirmDeleteSubModal();
-  closeArchiveDetailModal();
-  showStatus("تم حذف الاشتراك ✓");
-  openArchiveModal();
 }
 
 function confirmAddSubscription(){
@@ -1188,13 +1166,9 @@ document.getElementById("btnCloseArchive").addEventListener("click", closeArchiv
 document.getElementById("archiveList").addEventListener("click", (e) => {
   const chip = e.target.closest(".year-chip");
   if(!chip) return;
-  openArchiveDetailModal(Number(chip.dataset.index));
+  openArchiveDetailModal(chip.dataset.id);
 });
 document.getElementById("btnCloseArchiveDetail").addEventListener("click", closeArchiveDetailModal);
-document.getElementById("btnEditArchiveSub").addEventListener("click", editArchiveSub);
-document.getElementById("btnDeleteArchiveSub").addEventListener("click", openConfirmDeleteSubModal);
-document.getElementById("btnCancelDeleteSub").addEventListener("click", closeConfirmDeleteSubModal);
-document.getElementById("btnConfirmDeleteSub").addEventListener("click", confirmDeleteArchiveSub);
 
 document.getElementById("btnCancelExtendSub").addEventListener("click", closeExtendSubModal);
 document.getElementById("btnConfirmExtendSub").addEventListener("click", confirmExtendSub);
@@ -1240,7 +1214,6 @@ const MODAL_CLOSE_HANDLERS = {
   extendSubModal: closeExtendSubModal,
   archiveModal: closeArchiveModal,
   archiveDetailModal: closeArchiveDetailModal,
-  confirmDeleteSubModal: closeConfirmDeleteSubModal,
   annualPriceModal: closeAnnualPriceModal,
   tripModal: closeTripModal,
   priceModal: closePriceModal,
@@ -1263,7 +1236,6 @@ document.addEventListener("keydown", (e) => {
     closeExtendSubModal();
     closeArchiveModal();
     closeArchiveDetailModal();
-    closeConfirmDeleteSubModal();
     closeAnnualPriceModal();
     closeTripModal();
     closePriceModal();
@@ -1634,28 +1606,32 @@ function getAllSubscriptionSummaries(){
     const state = allData[year];
     if(state.subscription && state.subscription.startDate){
       const r = calculateSubscriptionValue(state.usage, state.subscription);
-      const end = getSubscriptionEndDate(state.subscription);
-      const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
       entries.push({
         id: `${year}-current`,
         label: state.subscription.startDate.slice(0,4),
         totalTrips: r.totalTrips,
         costWithSub: r.costWithSub,
         costWithoutSub: r.costWithoutSub,
-        savings: r.savings
+        savings: r.savings,
+        startDate: state.subscription.startDate,
+        extensionDays: Number(state.subscription.extensionDays || 0),
+        avgTicketPrice: getAverageTicketPrice(state.subscription),
+        costPerTrip: r.costPerTrip
       });
     }
     if(Array.isArray(state.subscriptionArchive)){
       state.subscriptionArchive.forEach((sub, idx) => {
-        const end = getSubscriptionEndDate(sub);
-        const endStr = `${end.getFullYear()}.${String(end.getMonth()+1).padStart(2,"0")}.${String(end.getDate()).padStart(2,"0")}`;
         entries.push({
           id: `${year}-archive-${idx}`,
           label: sub.startDate.slice(0,4),
           totalTrips: sub.totalTrips ?? 0,
           costWithSub: sub.annualPrice ?? 0,
           costWithoutSub: sub.costWithoutSub ?? 0,
-          savings: sub.totalSavings ?? 0
+          savings: sub.totalSavings ?? 0,
+          startDate: sub.startDate,
+          extensionDays: Number(sub.extensionDays || 0),
+          avgTicketPrice: sub.avgTicketPrice ?? 0,
+          costPerTrip: sub.costPerTrip ?? 0
         });
       });
     }
@@ -2324,6 +2300,7 @@ document.getElementById("btnConfirmRestore").addEventListener("click", () => {
 (function init(){
   bindMonthsTableEvents();
   const seeded = seedInitialDataIfEmpty(); // زرع بيانات 2023–2026 عند أول تشغيل فقط
+  const datesFixed = fixSeededStartDatesOnce(); // تصحيح تواريخ الشراء لمرة واحدة
   const allData = loadAllYearsData();
   const mostRecent = getMostRecentYear(allData);
   if(mostRecent){

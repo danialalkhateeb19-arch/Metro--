@@ -1,4 +1,4 @@
-const CACHE_NAME = 'metro-app-v10';
+const CACHE_NAME = 'metro-app-v11';
 
 /* مسارات نسبية (./) — تعمل على أي مستودع GitHub Pages مهما كان اسمه.
    التطبيق ملف واحد، فلا وجود لـ style.css أو script.js منفصلين. */
