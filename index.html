@@ -557,7 +557,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     <h2>النسخ الاحتياطي — جوجل درايف</h2>
     <div class="backup-setup-note" id="backupSetupNote" style="display:none;">
       لم يتم إعداد جوجل درايف بعد. افتح ملف <b>index.html</b> وضع معرّف العميل (Client ID) مكان
-      <b>268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com</b> في أعلى الكود.
+      <b>PUT_YOUR_GOOGLE_CLIENT_ID_HERE</b> في أعلى الكود.
     </div>
     <div class="backup-status" id="backupStatus">
       <div><span class="dot-state"></span><b id="backupStateText">غير متصل</b></div>
@@ -668,7 +668,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
 
 <div class="status-bar" id="statusBar" role="status" aria-live="polite"></div>
 <div class="autosave-toast" id="autosaveToast" role="status" aria-live="polite"></div>
-<footer>يعمل بالكامل محليًا في متصفحك — لا يتم إرسال أي بيانات لأي خادم</footer>
+<footer></footer>
 
 <nav class="bottom-nav" aria-label="التنقل الرئيسي">
   <button data-view="subscription" class="active" aria-current="page"><span class="icon" aria-hidden="true">🚇</span>الرحلات</button>
@@ -695,7 +695,7 @@ const LAST_VIEW_KEY = "metroAppLastView";
  * Google Cloud Console مكان النص الموجود بالأسفل بين علامتي التنصيص.
  * شكله يشبه: 1234567890-abcdefg.apps.googleusercontent.com
  * ============================================================ */
-const GOOGLE_CLIENT_ID = "268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
 
 /* ============================================================
  * البيانات السابقة (2023 – 2026) — تُزرع تلقائيًا مرة واحدة فقط
@@ -719,22 +719,47 @@ const SEED_SUBSCRIPTIONS = [
             "08":53, "09":50, "10":45, "11":47, "12":58, "01":12 } }        // إجمالي 574
 ];
 
-/** يبني بيانات السنوات السابقة ويحفظها — فقط إذا كان التخزين فارغًا تمامًا */
-function seedInitialDataIfEmpty(){
-  if(localStorage.getItem(ROOT_STORAGE_KEY)) return false;
-  const allData = {};
-  SEED_SUBSCRIPTIONS.forEach((s) => {
-    const state = defaultState(s.year);
-    state.subscription.annualPrice = s.annualPrice;
-    state.subscription.startDate = s.startDate;
-    MONTH_KEYS.forEach((k) => {
-      state.usage.months[k].trips = Number(s.trips[k] || 0);
-      state.subscription.ticketPrice.monthly[k] = s.troika;
-    });
-    allData[s.year] = state;
+/* علامة تُكتب مرة واحدة فقط بعد نجاح الزرع — تمنع رجوع أي سنة حذفتها لاحقًا */
+const SEED_FLAG_KEY = "metroSeedApplied_v1";
+
+/** هل هذه السنة "فارغة" (لم تُلمس)؟ صفر رحلات + صفر سعر + لا أرشيف */
+function isYearUntouched(state){
+  if(!state || !state.usage || !state.subscription) return true;
+  const trips = Object.values(state.usage.months).reduce((a,m)=>a+Number(m.trips||0),0);
+  const price = Number(state.subscription.annualPrice || 0);
+  const archive = Array.isArray(state.subscriptionArchive) ? state.subscriptionArchive.length : 0;
+  return trips === 0 && price === 0 && archive === 0;
+}
+
+/** يبني سنة واحدة من بيانات الإكسل */
+function buildSeedYear(s){
+  const state = defaultState(s.year);
+  state.subscription.annualPrice = s.annualPrice;
+  state.subscription.startDate = s.startDate;
+  MONTH_KEYS.forEach((k) => {
+    state.usage.months[k].trips = Number(s.trips[k] || 0);
+    state.subscription.ticketPrice.monthly[k] = s.troika;
   });
-  saveAllYearsData(allData);
-  return true;
+  return state;
+}
+
+/**
+ * يزرع بيانات 2023–2026 مرة واحدة فقط طوال عمر التطبيق.
+ * يكتب فقط على السنوات غير الموجودة أو الفارغة تمامًا،
+ * ولا يلمس أي سنة فيها بيانات حقيقية مهما كانت.
+ */
+function seedInitialDataIfEmpty(){
+  if(localStorage.getItem(SEED_FLAG_KEY)) return false; // زُرعت سابقًا — لا تتكرر أبدًا
+  const allData = loadAllYearsData();
+  let added = 0;
+  SEED_SUBSCRIPTIONS.forEach((s) => {
+    if(allData[s.year] && !isYearUntouched(allData[s.year])) return; // سنة فيها بيانات فعلية — لا تُمس
+    allData[s.year] = buildSeedYear(s);
+    added++;
+  });
+  localStorage.setItem(SEED_FLAG_KEY, "1");
+  if(added) saveAllYearsData(allData);
+  return added > 0;
 }
 
 function defaultState(year){
@@ -1975,6 +2000,7 @@ const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const DRIVE_TOKEN_KEY = "metroDriveToken";
 const DRIVE_LAST_BACKUP_KEY = "metroDriveLastBackup";
 const DRIVE_FILE_ID_KEY = "metroDriveFileId";
+const DRIVE_GRANTED_KEY = "metroDriveGranted"; // تُكتب بعد أول موافقة يدوية فقط
 const DRIVE_AUTO_DELAY_MS = 4000;
 
 let driveTokenClient = null;
@@ -1982,6 +2008,10 @@ let driveAccessToken = null;
 let driveTokenExpiry = 0;
 let driveBackupTimer = null;
 let driveBusy = false;
+let driveRenewing = false;      // محاولة تجديد جارية الآن
+let driveRenewTimer = null;     // مؤقّت التجديد الاستباقي
+let driveTokenWaiters = [];     // من ينتظر نتيجة محاولة الاتصال الحالية
+let driveTokenTimeoutId = null;
 
 function isDriveConfigured(){
   return GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.indexOf("PUT_YOUR_GOOGLE") === -1;
@@ -2018,35 +2048,113 @@ function initDriveClient(){
   driveTokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: DRIVE_SCOPE,
+    // prompt فارغ = لا تطلب موافقة إلا إذا كانت مطلوبة فعلًا.
+    // أول مرة ستظهر شاشة الموافقة تلقائيًا، وبعدها يتجدد الاتصال بصمت.
+    prompt: "",
     callback: (resp) => {
+      driveRenewing = false;
       if(resp && resp.access_token){
         storeDriveToken(resp.access_token, resp.expires_in);
+        localStorage.setItem(DRIVE_GRANTED_KEY, "1"); // وافق مرة واحدة → يُسمح بالتجديد الصامت لاحقًا
+        scheduleTokenRenewal();
         renderBackupModal();
-        showStatus("تم الاتصال بجوجل درايف ✓");
-        driveBackupNow(true);
+        flushDriveTokenWaiters(true);
+      } else {
+        renderBackupModal();
+        flushDriveTokenWaiters(false);
       }
     },
-    error_callback: () => showStatus("تعذّر الاتصال بجوجل درايف")
+    error_callback: () => {
+      driveRenewing = false;
+      renderBackupModal();
+      flushDriveTokenWaiters(false);
+    }
   });
 }
 
-function driveConnect(){
-  initDriveClient();
-  if(!driveTokenClient){ showStatus("خدمة جوجل غير متاحة حاليًا"); return; }
-  driveTokenClient.requestAccessToken({ prompt: driveAccessToken ? "" : "consent" });
+/** يوقظ نافذة إذن جوجل ويعيد وعدًا بنتيجة الاتصال (نجاح/فشل) */
+function driveRequestToken(){
+  return new Promise((resolve) => {
+    if(isDriveConnected()) return resolve(true);
+    initDriveClient();
+    if(!driveTokenClient) return resolve(false);
+
+    driveTokenWaiters.push(resolve);
+    driveRenewing = true;
+    renderBackupModal();
+
+    clearTimeout(driveTokenTimeoutId);
+    driveTokenTimeoutId = setTimeout(() => { // حماية من التعليق لو لم يرجع جوجل أي رد
+      driveRenewing = false;
+      renderBackupModal();
+      flushDriveTokenWaiters(false);
+    }, 20000);
+
+    try{
+      driveTokenClient.requestAccessToken({ prompt: "" });
+    }catch(e){
+      driveRenewing = false;
+      flushDriveTokenWaiters(false);
+    }
+  });
+}
+function flushDriveTokenWaiters(ok){
+  clearTimeout(driveTokenTimeoutId);
+  const waiters = driveTokenWaiters;
+  driveTokenWaiters = [];
+  waiters.forEach((fn) => fn(ok));
+}
+
+/**
+ * التجديد التلقائي الصامت — يُستدعى عند التشغيل، وعند العودة للتطبيق،
+ * وقبيل انتهاء صلاحية الرمز الحالي.
+ * لا يعمل إطلاقًا قبل أن يوافق المستخدم مرة واحدة يدويًا.
+ */
+async function driveAutoRenew(){
+  if(!isDriveConfigured()) return false;
+  if(localStorage.getItem(DRIVE_GRANTED_KEY) !== "1") return false; // لم توافق بعد
+  if(isDriveConnected()) return true;
+  if(driveRenewing) return false;
+  return await driveRequestToken();
+}
+
+/** يبرمج تجديدًا استباقيًا قبل انتهاء الصلاحية بقليل، ما دام التطبيق مفتوحًا */
+function scheduleTokenRenewal(){
+  clearTimeout(driveRenewTimer);
+  if(!driveTokenExpiry) return;
+  const delay = Math.max(5000, driveTokenExpiry - Date.now());
+  driveRenewTimer = setTimeout(() => { driveAutoRenew(); }, delay);
+}
+
+async function driveConnect(){
+  if(!isDriveConfigured()){ showStatus("لم يتم إعداد جوجل درايف بعد"); return; }
+  const ok = await driveRequestToken();
+  if(ok){
+    showStatus("تم الاتصال بجوجل درايف ✓");
+    driveBackupNow(true);
+  } else {
+    showStatus("تعذّر الاتصال بجوجل درايف");
+  }
 }
 function driveDisconnect(){
   clearDriveToken();
+  localStorage.removeItem(DRIVE_GRANTED_KEY); // يمنع التجديد التلقائي بعد قطع الاتصال عمدًا
+  clearTimeout(driveRenewTimer);
   renderBackupModal();
   showStatus("تم قطع الاتصال");
 }
 
-async function driveFetch(url, options){
-  const opts = options || {};
-  opts.headers = Object.assign({ Authorization: "Bearer " + driveAccessToken }, opts.headers || {});
+async function driveFetch(url, options, retried){
+  const opts = Object.assign({}, options || {});
+  opts.headers = Object.assign({ Authorization: "Bearer " + driveAccessToken }, (options && options.headers) || {});
   const res = await fetch(url, opts);
   if(res.status === 401 || res.status === 403){
     clearDriveToken();
+    // محاولة تجديد صامتة واحدة ثم إعادة الطلب — بدون أي تدخل من المستخدم
+    if(!retried && await driveAutoRenew()){
+      return driveFetch(url, options, true);
+    }
+    renderBackupModal();
     throw new Error("انتهت صلاحية الاتصال بجوجل درايف");
   }
   if(!res.ok) throw new Error("خطأ في جوجل درايف (" + res.status + ")");
@@ -2120,11 +2228,25 @@ async function driveBackupNow(silent){
   }
 }
 
+/** هل كل البيانات المحلية فارغة؟ (حماية من الكتابة فوق نسخة سليمة) */
+function isAllDataEmpty(){
+  const all = loadAllYearsData();
+  const years = Object.keys(all);
+  if(!years.length) return true;
+  return years.every((y) => isYearUntouched(all[y]));
+}
+
 /** نسخ تلقائي مؤجّل — يجمّع التعديلات المتتابعة في رفعة واحدة */
 function scheduleDriveBackup(){
-  if(!isDriveConnected()) return;
+  if(!isDriveConfigured()) return;
+  if(localStorage.getItem(DRIVE_GRANTED_KEY) !== "1") return; // لم توافق بعد
+  // لا نرفع بيانات فارغة تلقائيًا فوق نسخة موجودة — الرفع اليدوي يبقى متاحًا دائمًا
+  if(isAllDataEmpty()) return;
   clearTimeout(driveBackupTimer);
-  driveBackupTimer = setTimeout(() => driveBackupNow(true), DRIVE_AUTO_DELAY_MS);
+  driveBackupTimer = setTimeout(async () => {
+    if(!isDriveConnected()) await driveAutoRenew(); // انتهت الصلاحية أثناء العمل → جدّدها بصمت
+    driveBackupNow(true);
+  }, DRIVE_AUTO_DELAY_MS);
 }
 
 /** يستعيد كل البيانات من النسخة المحفوظة في الدرايف ثم يعيد تحميل التطبيق */
@@ -2148,21 +2270,28 @@ async function driveRestore(){
 function renderBackupModal(){
   const configured = isDriveConfigured();
   const connected = isDriveConnected();
+  const granted = localStorage.getItem(DRIVE_GRANTED_KEY) === "1";
 
   document.getElementById("backupSetupNote").style.display = configured ? "none" : "";
   document.getElementById("backupStatus").classList.toggle("connected", connected);
-  document.getElementById("backupStateText").textContent = connected ? "متصل بجوجل درايف" : "غير متصل";
+  document.getElementById("backupStateText").textContent =
+    connected ? "متصل بجوجل درايف"
+    : driveRenewing ? "جارٍ تجديد الاتصال…"
+    : granted ? "الاتصال منتهي — يحتاج إعادة ربط"
+    : "غير متصل";
 
   const last = localStorage.getItem(DRIVE_LAST_BACKUP_KEY);
   document.getElementById("backupLastText").textContent = last
     ? new Date(last).toLocaleString("ar-EG", { dateStyle:"short", timeStyle:"short" })
     : "—";
 
-  document.getElementById("btnDriveConnect").style.display = connected ? "none" : "";
+  // زر الاتصال يظهر فقط عند الحاجة الفعلية: غير متصل ولا توجد محاولة تجديد جارية
+  const showConnect = !connected && !driveRenewing;
+  document.getElementById("btnDriveConnect").style.display = showConnect ? "" : "none";
   document.getElementById("btnDriveConnect").disabled = !configured;
   document.getElementById("btnDriveBackupNow").style.display = connected ? "" : "none";
   document.getElementById("btnDriveRestore").style.display = connected ? "" : "none";
-  document.getElementById("btnDriveDisconnect").style.display = connected ? "" : "none";
+  document.getElementById("btnDriveDisconnect").style.display = (connected || granted) ? "" : "none";
 }
 function openBackupModal(){
   initDriveClient();
@@ -2205,7 +2334,25 @@ document.getElementById("btnConfirmRestore").addEventListener("click", () => {
   switchView(getLastView(), true); // استعادة آخر صفحة مفتوحة فورًا بدون أنيميشن
 
   loadStoredDriveToken();
-  window.addEventListener("load", initDriveClient);
+  if(isDriveConnected()) scheduleTokenRenewal();
+
+  /* ينتظر تحميل مكتبة جوجل (تُحمَّل بشكل غير متزامن) ثم يجدد الاتصال بصمت */
+  (function waitForGoogleThenRenew(attempt){
+    if(!isDriveConfigured()) return;
+    if(window.google && google.accounts && google.accounts.oauth2){
+      initDriveClient();
+      driveAutoRenew();
+      return;
+    }
+    if(attempt < 40) setTimeout(() => waitForGoogleThenRenew(attempt + 1), 300); // حتى 12 ثانية
+  })(0);
+
+  /* عند العودة للتطبيق بعد إغلاقه أو تركه في الخلفية — جدّد الاتصال إن لزم */
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "visible") driveAutoRenew();
+  });
+  window.addEventListener("online", () => driveAutoRenew());
+
   if(seeded) showStatus("تم تحميل بيانات السنوات السابقة ✓");
 })();
 
