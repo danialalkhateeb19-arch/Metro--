@@ -545,7 +545,17 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   <div class="modal-box">
     <h2>تفاصيل الاشتراك</h2>
     <div id="archiveDetailContent" style="margin-bottom:14px; line-height:2;"></div>
+    <button class="btn modal-full" id="btnDeleteArchiveSub" style="margin-bottom:10px; color:#c0392b; border-color:#c0392b;">حذف الاشتراك</button>
     <button class="btn modal-full" id="btnCloseArchiveDetail">إغلاق</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="confirmDeleteSubModal">
+  <div class="modal-box">
+    <h2>تأكيد الحذف</h2>
+    <p style="font-size:.9rem; color:var(--text-dim); margin-bottom:16px;" id="confirmDeleteSubText"></p>
+    <button class="btn primary modal-full" id="btnConfirmDeleteSub" style="margin-bottom:10px; background:#c0392b; border-color:#c0392b;">نعم، احذف</button>
+    <button class="btn modal-full" id="btnCancelDeleteSub">تراجع</button>
   </div>
 </div>
 
@@ -1046,6 +1056,7 @@ function closeArchiveModal(){
 function openArchiveDetailModal(id){
   const sub = getAllSubscriptionSummaries().find(x => x.id === id);
   if(!sub) return;
+  selectedArchiveId = id;
 
   const start = new Date(sub.startDate + "T00:00:00");
   const startStr = `${start.getFullYear()}.${String(start.getMonth()+1).padStart(2,"0")}.${String(start.getDate()).padStart(2,"0")}`;
@@ -1068,6 +1079,95 @@ function openArchiveDetailModal(id){
 }
 function closeArchiveDetailModal(){
   document.getElementById("archiveDetailModal").classList.add("hidden");
+}
+
+/* ============================================================
+ * حذف اشتراك من الأرشيف
+ * ------------------------------------------------------------
+ * كل عنصر في القائمة إمّا اشتراك "حالي" لسنة ما، أو اشتراك مؤرشف
+ * داخلها. رسالة التأكيد تتغيّر حسب ما سيُفقد فعليًا:
+ *  - مؤرشف            → يُحذف وحده.
+ *  - حالي وللسنة أرشيف → يُحذف ويعود الاشتراك السابق ليكون الحالي
+ *                        (تراجع نظيف عن إضافة بالخطأ).
+ *  - حالي بلا أرشيف    → تُحذف السنة كاملة ببياناتها الشهرية.
+ * ============================================================ */
+let selectedArchiveId = null;
+
+function parseSubId(id){
+  const m = /^(\d+)-(current|archive-(\d+))$/.exec(id || "");
+  if(!m) return null;
+  return { year: m[1], isCurrent: m[2] === "current", index: m[3] !== undefined ? Number(m[3]) : -1 };
+}
+
+function openConfirmDeleteSubModal(){
+  const p = parseSubId(selectedArchiveId);
+  if(!p) return;
+  const state = loadAllYearsData()[p.year];
+  if(!state) return;
+  const archiveCount = Array.isArray(state.subscriptionArchive) ? state.subscriptionArchive.length : 0;
+
+  let msg;
+  if(!p.isCurrent){
+    msg = "سيتم حذف هذا الاشتراك من الأرشيف. لا يمكن التراجع.";
+  } else if(archiveCount > 0){
+    msg = "سيتم حذف هذا الاشتراك وإرجاع الاشتراك السابق لنفس السنة مكانه. البيانات الشهرية تبقى كما هي.";
+  } else {
+    const trips = getTotalTrips(state.usage);
+    msg = `هذا هو الاشتراك الوحيد لسنة ${p.year}. حذفه يحذف السنة كاملة مع بياناتها الشهرية (${trips} رحلة). لا يمكن التراجع.`;
+  }
+  document.getElementById("confirmDeleteSubText").textContent = msg;
+  document.getElementById("confirmDeleteSubModal").classList.remove("hidden");
+}
+function closeConfirmDeleteSubModal(){
+  document.getElementById("confirmDeleteSubModal").classList.add("hidden");
+}
+
+function confirmDeleteArchiveSub(){
+  const p = parseSubId(selectedArchiveId);
+  if(!p) return;
+  const allData = loadAllYearsData();
+  const state = allData[p.year];
+  if(!state) return;
+
+  if(!p.isCurrent){
+    if(Array.isArray(state.subscriptionArchive)) state.subscriptionArchive.splice(p.index, 1);
+  } else {
+    const arch = Array.isArray(state.subscriptionArchive) ? state.subscriptionArchive : [];
+    if(arch.length){
+      const prev = arch.pop(); // آخر اشتراك مؤرشف يعود ليكون الحالي
+      state.subscription.startDate = prev.startDate;
+      state.subscription.extensionDays = prev.extensionDays || 0;
+      state.subscription.extended = (prev.extensionDays || 0) > 0;
+      if(prev.annualPrice !== undefined) state.subscription.annualPrice = prev.annualPrice;
+    } else {
+      delete allData[p.year]; // آخر اشتراك في السنة → تُحذف السنة كاملة
+    }
+  }
+  saveAllYearsData(allData);
+  selectedArchiveId = null;
+
+  // إعادة تحميل السنة المعروضة من التخزين (أو الانتقال لأحدث سنة متبقية)
+  const remaining = loadAllYearsData();
+  if(remaining[currentYear]){
+    openYear(currentYear);
+  } else {
+    const mr = getMostRecentYear(remaining);
+    openYear(mr || String(new Date().getFullYear()));
+  }
+
+  // تنظيف فلتر الإحصائيات من أي اشتراك لم يعد موجودًا
+  if(statsAppliedScope !== "all"){
+    const ids = getAllSubscriptionSummaries().map((s) => s.id);
+    statsAppliedScope = statsAppliedScope.filter((x) => ids.includes(x));
+    if(!statsAppliedScope.length) statsAppliedScope = "all";
+  }
+  renderStatistics();
+  scheduleDriveBackup(); // تحديث النسخة على الدرايف بعد الحذف
+
+  closeConfirmDeleteSubModal();
+  closeArchiveDetailModal();
+  showStatus("تم حذف الاشتراك ✓");
+  openArchiveModal();
 }
 
 function confirmAddSubscription(){
@@ -1169,6 +1269,9 @@ document.getElementById("archiveList").addEventListener("click", (e) => {
   openArchiveDetailModal(chip.dataset.id);
 });
 document.getElementById("btnCloseArchiveDetail").addEventListener("click", closeArchiveDetailModal);
+document.getElementById("btnDeleteArchiveSub").addEventListener("click", openConfirmDeleteSubModal);
+document.getElementById("btnCancelDeleteSub").addEventListener("click", closeConfirmDeleteSubModal);
+document.getElementById("btnConfirmDeleteSub").addEventListener("click", confirmDeleteArchiveSub);
 
 document.getElementById("btnCancelExtendSub").addEventListener("click", closeExtendSubModal);
 document.getElementById("btnConfirmExtendSub").addEventListener("click", confirmExtendSub);
@@ -1214,6 +1317,7 @@ const MODAL_CLOSE_HANDLERS = {
   extendSubModal: closeExtendSubModal,
   archiveModal: closeArchiveModal,
   archiveDetailModal: closeArchiveDetailModal,
+  confirmDeleteSubModal: closeConfirmDeleteSubModal,
   annualPriceModal: closeAnnualPriceModal,
   tripModal: closeTripModal,
   priceModal: closePriceModal,
@@ -1236,6 +1340,7 @@ document.addEventListener("keydown", (e) => {
     closeExtendSubModal();
     closeArchiveModal();
     closeArchiveDetailModal();
+    closeConfirmDeleteSubModal();
     closeAnnualPriceModal();
     closeTripModal();
     closePriceModal();
