@@ -394,6 +394,25 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
   .months-table th:nth-child(3){ width:36%; }
   .months-table td.month-name{ font-size:.78rem; }
 }
+/* ===== شريط التنقل بين الاشتراكات ===== */
+.sub-switcher{
+  width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+  background: var(--bg-panel); border:1px solid var(--border); border-radius:20px;
+  padding:11px 16px; font-family:'Cairo',sans-serif; font-weight:700; font-size:.88rem;
+  color: var(--text); cursor:pointer; box-shadow: var(--shadow);
+  transition: border-color .15s ease, transform .1s ease;
+}
+.sub-switcher:hover{ border-color: var(--accent); }
+.sub-switcher:active{ transform:scale(.98); }
+.sub-switcher:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.sub-switcher .caret{ color: var(--text-dim); font-size:.75rem; }
+.sub-status{ font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:12px; }
+.sub-status.active{ background:#e4f2ea; color: var(--good); }
+.sub-status.expired{ background:#f7e8e6; color: var(--bad); }
+.sub-status.upcoming{ background: var(--accent-bg); color: var(--accent); }
+.chip-sub{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+.chip-sub .chip-status{ font-size:.68rem; font-weight:700; opacity:.85; }
+
 .chart-card-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .chart-card-header h2{ margin:0; }
 
@@ -437,9 +456,9 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
 <!-- ============ Year Picker Modal ============ -->
 <div class="modal-overlay hidden" id="yearPickerModal">
   <div class="modal-box">
-    <h2>اختر السنة</h2>
+    <h2>الاشتراكات</h2>
     <div class="year-chip-list" id="yearChipList"></div>
-    <button class="btn primary modal-full" id="btnOpenAddYear">+ إضافة سنة</button>
+    <button class="btn primary modal-full" id="btnOpenAddYear">+ إضافة اشتراك</button>
   </div>
 </div>
 
@@ -570,6 +589,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     <div class="backup-status" id="backupStatus">
       <div><span class="dot-state"></span><b id="backupStateText">غير متصل</b></div>
       <div id="backupAccountText" style="display:none;"></div>
+      <div id="backupFileLink" style="display:none;"></div>
       <div>آخر نسخة: <b id="backupLastText">—</b></div>
     </div>
     <button class="btn primary modal-full" id="btnDriveConnect" style="margin-bottom:10px;">الاتصال بجوجل درايف</button>
@@ -592,6 +612,12 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
 <main>
 
   <section class="view active" id="view-subscription">
+    <button type="button" class="sub-switcher" id="subSwitcherBtn" title="التنقل بين الاشتراكات">
+      <span id="subSwitcherLabel">—</span>
+      <span class="sub-status" id="subSwitcherStatus"></span>
+      <span class="caret" aria-hidden="true">▾</span>
+    </button>
+
     <div class="lux-card" id="luxCard">
       <div class="lux-remaining" id="luxRemainingDays">—</div>
       <div class="lux-divider"></div>
@@ -901,14 +927,30 @@ function getCostWithoutSubscription(usage, subscription){
   return total;
 }
 
-/** تاريخ انتهاء الاشتراك = تاريخ البدء + 365 يوم + أيام التمديد (حتى 14 يوم) */
+/** تاريخ انتهاء الاشتراك = سنة تقويمية كاملة ناقص يوم + أيام التمديد.
+ *  يُحسب بالتقويم (نفس اليوم من السنة التالية − 1) لا بعدد أيام ثابت،
+ *  حتى لا يضيع يوم عند مرور 29 فبراير في السنوات الكبيسة. */
 function getSubscriptionEndDate(subscription){
   const start = new Date(subscription.startDate + "T00:00:00");
   const extension = Number(subscription.extensionDays || 0);
   const end = new Date(start);
-  end.setDate(end.getDate() + 364 + extension);
+  end.setFullYear(end.getFullYear() + 1);
+  end.setDate(end.getDate() - 1 + extension);
   return end;
 }
+
+/** حالة الاشتراك بالنسبة لليوم: لم يبدأ / نشط / منتهٍ + عدد الأيام المناسب لكل حالة */
+function getSubscriptionStatus(subscription){
+  const start = new Date(subscription.startDate + "T00:00:00");
+  const end = getSubscriptionEndDate(subscription);
+  const today = new Date();
+  today.setHours(0,0,0,0); start.setHours(0,0,0,0); end.setHours(0,0,0,0);
+
+  if(today < start) return { state:"upcoming", days: Math.round((start - today)/86400000) };
+  if(today > end)   return { state:"expired",  days: Math.round((today - end)/86400000) };
+  return { state:"active", days: Math.round((end - today)/86400000) };
+}
+const SUB_STATUS_LABEL = { upcoming:"لم يبدأ", active:"نشط", expired:"منتهٍ" };
 
 /** عدد الأيام المتبقية حتى تاريخ الانتهاء (لا تقل عن صفر) */
 function getRemainingDays(subscription){
@@ -950,6 +992,20 @@ function saveCurrentYearData(){
 function autoSave(){
   saveCurrentYearData();
 }
+/** يختار الاشتراك النشط اليوم؛ وإن لم يوجد فأحدث اشتراك بتاريخ الشراء */
+function findActiveYear(allData){
+  let active = null, latest = null;
+  Object.keys(allData).forEach((y) => {
+    const sub = allData[y] && allData[y].subscription;
+    if(!sub || !sub.startDate) return;
+    if(!latest || sub.startDate > allData[latest].subscription.startDate) latest = y;
+    if(getSubscriptionStatus(sub).state === "active"){
+      if(!active || sub.startDate > allData[active].subscription.startDate) active = y;
+    }
+  });
+  return active || latest;
+}
+
 function getMostRecentYear(allData){
   const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
   return years.length ? years[0] : null;
@@ -981,10 +1037,22 @@ function openYear(year){
 function renderYearChipList(){
   const list = document.getElementById("yearChipList");
   const allData = loadAllYearsData();
-  const years = Object.keys(allData).sort((a,b)=>Number(b)-Number(a));
-  list.innerHTML = years.map(y =>
-    `<button type="button" class="year-chip${y===currentYear?' current':''}" data-year="${y}">${y}</button>`
-  ).join("");
+  const items = Object.keys(allData)
+    .filter((y) => allData[y].subscription && allData[y].subscription.startDate)
+    .map((y) => ({ year:y, sub: allData[y].subscription }))
+    .sort((a,b) => b.sub.startDate.localeCompare(a.sub.startDate)); // الأحدث أولًا
+
+  if(!items.length){
+    list.innerHTML = '<div style="font-size:.85rem; color:var(--text-dim);">لا توجد اشتراكات</div>';
+    return;
+  }
+  list.innerHTML = items.map(({year, sub}) => {
+    const st = getSubscriptionStatus(sub);
+    const d = sub.startDate;
+    return `<button type="button" class="year-chip chip-sub${year===currentYear?' current':''}" data-year="${year}">`
+      + `<span>${d.slice(8,10)}.${d.slice(5,7)}.${d.slice(0,4)}</span>`
+      + `<span class="chip-status">${SUB_STATUS_LABEL[st.state]}</span></button>`;
+  }).join("");
 }
 function openYearPickerModal(){
   renderYearChipList();
@@ -1176,29 +1244,44 @@ function confirmAddSubscription(){
     showStatus("أدخل تاريخ الشراء");
     return;
   }
-  if(AppState.subscription.startDate){
-    if(!Array.isArray(AppState.subscriptionArchive)) AppState.subscriptionArchive = [];
-    const r = calculateSubscriptionValue(AppState.usage, AppState.subscription);
-    const avgTicketPrice = getAverageTicketPrice(AppState.subscription);
-    AppState.subscriptionArchive.push({
-      startDate: AppState.subscription.startDate,
-      extensionDays: AppState.subscription.extensionDays || 0,
-      totalTrips: r.totalTrips,
-      annualPrice: AppState.subscription.annualPrice,
-      costPerTrip: r.costPerTrip,
-      avgTicketPrice: avgTicketPrice,
-      savingsPerTrip: avgTicketPrice - r.costPerTrip,
-      totalSavings: r.savings,
-      avgTripsPerMonth: r.totalTrips / 12,
-      costWithoutSub: r.costWithoutSub
-    });
+
+  /* كل اشتراك يعيش في صفحة سنة بدايته هو — لا في السنة المفتوحة حاليًا.
+     هذا ما يجعل لكل اشتراك صفحته المستقلة وعدّاد أيامه الصحيح. */
+  const targetYear = startVal.slice(0, 4);
+  const allData = loadAllYearsData();
+
+  if(!allData[targetYear]){
+    const fresh = defaultState(targetYear);          // صفحة جديدة نظيفة
+    fresh.subscription.startDate = startVal;
+    allData[targetYear] = fresh;
+  } else {
+    const st = allData[targetYear];
+    if(st.subscription && st.subscription.startDate){ // سنة فيها اشتراك → يُؤرشف داخلها
+      if(!Array.isArray(st.subscriptionArchive)) st.subscriptionArchive = [];
+      const r = calculateSubscriptionValue(st.usage, st.subscription);
+      const avgTicketPrice = getAverageTicketPrice(st.subscription);
+      st.subscriptionArchive.push({
+        startDate: st.subscription.startDate,
+        extensionDays: st.subscription.extensionDays || 0,
+        totalTrips: r.totalTrips,
+        annualPrice: st.subscription.annualPrice,
+        costPerTrip: r.costPerTrip,
+        avgTicketPrice: avgTicketPrice,
+        savingsPerTrip: avgTicketPrice - r.costPerTrip,
+        totalSavings: r.savings,
+        avgTripsPerMonth: r.totalTrips / 12,
+        costWithoutSub: r.costWithoutSub
+      });
+    }
+    st.subscription.startDate = startVal;
+    st.subscription.extensionDays = 0;
+    st.subscription.extended = false;
   }
-  AppState.subscription.startDate = startVal;
-  AppState.subscription.extensionDays = 0;
-  AppState.subscription.extended = false;
+
+  saveAllYearsData(allData);
+  openYear(targetYear);      // ينتقل فورًا لصفحة الاشتراك الجديد
   pushHistory();
-  autoSave();
-  refreshAllViews();
+  scheduleDriveBackup();
   showStatus("تم إضافة الاشتراك ✓");
   closeAddSubscriptionModal();
 }
@@ -1249,9 +1332,10 @@ document.getElementById("yearChipList").addEventListener("click", (e) => {
   openYear(chip.dataset.year); // تبديل فوري وتحديث البيانات — بدون أي زر تأكيد
 });
 
+document.getElementById("subSwitcherBtn").addEventListener("click", openYearPickerModal);
 document.getElementById("btnOpenAddYear").addEventListener("click", () => {
   closeYearPickerModal();
-  openAddYearModal();
+  openAddSubscriptionModal();
 });
 document.getElementById("btnCancelAddYear").addEventListener("click", closeAddYearModal);
 document.getElementById("btnConfirmAddYear").addEventListener("click", confirmAddYear);
@@ -1741,6 +1825,17 @@ function getAllSubscriptionSummaries(){
       });
     }
   });
+
+  // ترتيب زمني صارم حسب تاريخ الشراء — يضمن استقامة الرسوم البيانية
+  entries.sort((a,b) => a.startDate.localeCompare(b.startDate));
+
+  // لو تكرّرت سنة (اشتراكان في نفس السنة) نضيف الشهر للتمييز بينهما
+  const seen = {};
+  entries.forEach((e) => { seen[e.label] = (seen[e.label] || 0) + 1; });
+  entries.forEach((e) => {
+    if(seen[e.label] > 1) e.label = `${e.startDate.slice(0,4)}.${e.startDate.slice(5,7)}`;
+  });
+
   return entries;
 }
 
@@ -2007,14 +2102,30 @@ function renderLuxuryCard(){
   const d = String(endDate.getDate()).padStart(2,"0");
   document.getElementById("luxEndDate").textContent = `${y}.${m}.${d}`;
 
-  const remaining = getRemainingDays(AppState.subscription);
-  document.getElementById("luxRemainingDays").textContent = `الأيام المتبقية: ${remaining} يوم`;
+  const st = getSubscriptionStatus(AppState.subscription);
+  const el = document.getElementById("luxRemainingDays");
+  if(st.state === "upcoming")      el.textContent = `يبدأ بعد ${st.days} يوم`;
+  else if(st.state === "expired")  el.textContent = `منتهٍ منذ ${st.days} يوم`;
+  else                             el.textContent = `الأيام المتبقية: ${st.days} يوم`;
+}
+
+/** شريط التنقل بين الاشتراكات أعلى الصفحة */
+function renderSubSwitcher(){
+  const label = document.getElementById("subSwitcherLabel");
+  const badge = document.getElementById("subSwitcherStatus");
+  if(!label || !AppState || !AppState.subscription.startDate) return;
+  const sd = AppState.subscription.startDate;
+  label.textContent = `اشتراك ${sd.slice(8,10)}.${sd.slice(5,7)}.${sd.slice(0,4)}`;
+  const st = getSubscriptionStatus(AppState.subscription);
+  badge.textContent = SUB_STATUS_LABEL[st.state];
+  badge.className = "sub-status " + st.state;
 }
 
 function refreshAllViews(){
   renderMonthsTable();
   renderSubscriptionResults();
   renderLuxuryCard();
+  renderSubSwitcher();
 }
 
 /* ============================================================
@@ -2299,6 +2410,7 @@ async function driveBackupNow(silent){
 
     localStorage.setItem(DRIVE_LAST_BACKUP_KEY, new Date().toISOString());
     renderBackupModal();
+    refreshDriveIdentity(); // يحدّث رابط الملف فور إنشائه أول مرة
     if(silent) showAutosaveToast("تم حفظ نسخة على درايف");
     else showStatus("تم رفع النسخة الاحتياطية ✓");
   }catch(err){
@@ -2367,6 +2479,10 @@ function renderBackupModal(){
     : "—";
 
   // زر الاتصال يظهر فقط عند الحاجة الفعلية: غير متصل ولا توجد محاولة تجديد جارية
+  if(!connected){
+    document.getElementById("backupAccountText").style.display = "none";
+    document.getElementById("backupFileLink").style.display = "none";
+  }
   const showConnect = !connected && !driveRenewing;
   document.getElementById("btnDriveConnect").style.display = showConnect ? "" : "none";
   document.getElementById("btnDriveConnect").disabled = !configured;
@@ -2374,10 +2490,40 @@ function renderBackupModal(){
   document.getElementById("btnDriveRestore").style.display = connected ? "" : "none";
   document.getElementById("btnDriveDisconnect").style.display = (connected || granted) ? "" : "none";
 }
+/* ============================================================
+ * يعرض الحساب المتصل ورابطًا مباشرًا لملف النسخة داخل الدرايف،
+ * حتى تعرف بالضبط أين رُفع الملف وبأي حساب. فشل أي منهما
+ * لا يؤثر على النسخ الاحتياطي إطلاقًا.
+ * ============================================================ */
+async function refreshDriveIdentity(){
+  if(!isDriveConnected()) return;
+
+  try{
+    const res = await driveFetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)");
+    const info = await res.json();
+    const el = document.getElementById("backupAccountText");
+    if(info && info.user && info.user.emailAddress){
+      el.textContent = "الحساب: " + info.user.emailAddress;
+      el.style.display = "";
+    }
+  }catch(e){ /* تجاهل صامت */ }
+
+  try{
+    const id = localStorage.getItem(DRIVE_FILE_ID_KEY) || await findDriveBackupFile();
+    const el = document.getElementById("backupFileLink");
+    if(id){
+      el.innerHTML = 'الملف: <a href="https://drive.google.com/file/d/' + id +
+        '/view" target="_blank" rel="noopener" style="color:var(--accent); font-weight:700;">metro-backup.json ↗</a>';
+      el.style.display = "";
+    }
+  }catch(e){ /* تجاهل صامت */ }
+}
+
 function openBackupModal(){
   initDriveClient();
   renderBackupModal();
   document.getElementById("backupModal").classList.remove("hidden");
+  refreshDriveIdentity();
 }
 function closeBackupModal(){
   document.getElementById("backupModal").classList.add("hidden");
@@ -2407,7 +2553,7 @@ document.getElementById("btnConfirmRestore").addEventListener("click", () => {
   const seeded = seedInitialDataIfEmpty(); // زرع بيانات 2023–2026 عند أول تشغيل فقط
   const datesFixed = fixSeededStartDatesOnce(); // تصحيح تواريخ الشراء لمرة واحدة
   const allData = loadAllYearsData();
-  const mostRecent = getMostRecentYear(allData);
+  const mostRecent = findActiveYear(allData) || getMostRecentYear(allData);
   if(mostRecent){
     openYear(mostRecent);
   } else {
