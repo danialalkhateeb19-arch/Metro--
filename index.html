@@ -584,7 +584,7 @@ footer{ text-align:center; padding: 24px; color: var(--text-dim); font-size:.75r
     <h2>النسخ الاحتياطي — جوجل درايف</h2>
     <div class="backup-setup-note" id="backupSetupNote" style="display:none;">
       لم يتم إعداد جوجل درايف بعد. افتح ملف <b>index.html</b> وضع معرّف العميل (Client ID) مكان
-      <b>268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com</b> في أعلى الكود.
+      <b>PUT_YOUR_GOOGLE_CLIENT_ID_HERE</b> في أعلى الكود.
     </div>
     <div class="backup-status" id="backupStatus">
       <div><span class="dot-state"></span><b id="backupStateText">غير متصل</b></div>
@@ -720,7 +720,7 @@ const LAST_VIEW_KEY = "metroAppLastView";
  * Google Cloud Console مكان النص الموجود بالأسفل بين علامتي التنصيص.
  * شكله يشبه: 1234567890-abcdefg.apps.googleusercontent.com
  * ============================================================ */
-const GOOGLE_CLIENT_ID = "268773832225-2j2fjpcmops18safefuoict3ofi6eer7.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
 
 /* ============================================================
  * البيانات السابقة (2023 – 2026) — تُزرع تلقائيًا مرة واحدة فقط
@@ -2569,7 +2569,17 @@ document.getElementById("btnConfirmRestore").addEventListener("click", () => {
     if(!isDriveConfigured()) return;
     if(window.google && google.accounts && google.accounts.oauth2){
       initDriveClient();
-      driveAutoRenew();
+      driveAutoRenew().then((connected) => {
+        if(!connected) return;
+        // يرفع أي تعديل محفوظ محلياً ولم يُرفع بعد (خرج المستخدم قبل المؤقت)
+        try{
+          const allData = loadAllYearsData();
+          const lastLocal = Object.values(allData)
+            .map(s => s.meta && s.meta.lastUpdated || "").sort().pop() || "";
+          const lastBackup = localStorage.getItem(DRIVE_LAST_BACKUP_KEY) || "";
+          if(lastLocal && lastLocal > lastBackup) driveBackupNow(true);
+        }catch(e){ /* تجاهل صامت */ }
+      });
       return;
     }
     if(attempt < 40) setTimeout(() => waitForGoogleThenRenew(attempt + 1), 300); // حتى 12 ثانية
@@ -2577,7 +2587,16 @@ document.getElementById("btnConfirmRestore").addEventListener("click", () => {
 
   /* عند العودة للتطبيق بعد إغلاقه أو تركه في الخلفية — جدّد الاتصال إن لزم */
   document.addEventListener("visibilitychange", () => {
-    if(document.visibilityState === "visible") driveAutoRenew();
+    if(document.visibilityState === "visible"){
+      driveAutoRenew();
+    } else {
+      /* خرج من التطبيق أو أغلقه — يرفع فورًا أي تعديل معلّق بدل انتظار المؤقت */
+      if(driveBackupTimer){
+        clearTimeout(driveBackupTimer);
+        driveBackupTimer = null;
+        driveBackupNow(true);
+      }
+    }
   });
   window.addEventListener("online", () => driveAutoRenew());
 
